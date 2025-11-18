@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -245,7 +245,12 @@ export default function RoomPage() {
   }, [roomId, prepareInitialScene]);
 
 
-  // Auto-save to localStorage immediately on every change (only if owner)
+
+  // Use ref to track debounce timeout and prevent infinite loops
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedRef = useRef<string>("");
+
+  // Auto-save to localStorage with debounce to prevent infinite loops
   const handleChange = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (elements: readonly any[], appState: any, files: any) => {
@@ -254,46 +259,84 @@ export default function RoomPage() {
         return;
       }
       
-      console.log("handleChange called", { elementsCount: elements.length });
-      
       // Clean appState before saving - remove runtime-only properties
       const cleanAppState = sanitizeAppState(appState);
 
-      try {
-        // Update local room scene immediately (auto-save)
-        updateLocalRoomScene(roomId, {
-          elements,
-          appState: cleanAppState,
-          files: files || {},
+      // Ensure files are properly serializable (Excalidraw should already provide base64 data URLs)
+      const serializableFiles = files ? { ...files } : {};
+
+      // Log files info for debugging
+      if (files && Object.keys(files).length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const firstFile = Object.values(files)[0] as any;
+        console.log("Files detected:", {
+          count: Object.keys(files).length,
+          keys: Object.keys(files),
+          sampleFile: firstFile ? {
+            id: firstFile?.id,
+            mimeType: firstFile?.mimeType,
+            dataURL: firstFile?.dataURL ? "present" : "missing",
+          } : null,
         });
-
-        console.log("Saved to localStorage:", roomId);
-
-        // Refresh local room state
-        const updatedRoom = loadLocalRoom(roomId);
-        if (updatedRoom) {
-          setLocalRoom(updatedRoom);
-          // After local update, mark as needing sync if it was previously synced
-          setSyncStatus((prev) => {
-            // If was synced before, now needs push
-            const syncAction = prev.dbExists && prev.isInSync ? "push" : prev.syncAction;
-            return {
-              ...prev,
-              status: updatedRoom.status,
-              needsSync: updatedRoom.status === "local-only" ? true : prev.needsSync || true,
-              isInSync: false, // Local changed, so out of sync
-              syncAction: syncAction || "push",
-            };
-          });
-        } else {
-          console.warn("Failed to load room after save:", roomId);
-        }
-      } catch (error) {
-        console.error("Error saving to localStorage:", error);
       }
+
+      // Create a hash of the current state to avoid saving if nothing changed
+      const currentStateHash = JSON.stringify({
+        elementsCount: elements.length,
+        appStateKeys: Object.keys(cleanAppState).length,
+        filesCount: Object.keys(serializableFiles).length,
+      });
+
+      // Skip if state hasn't changed
+      if (currentStateHash === lastSavedRef.current) {
+        return;
+      }
+
+      // Clear existing timeout
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      // Debounce the save operation to prevent excessive updates
+      saveTimeoutRef.current = setTimeout(() => {
+        try {
+          // Update local room scene immediately (auto-save)
+          updateLocalRoomScene(roomId, {
+            elements,
+            appState: cleanAppState,
+            files: serializableFiles,
+          });
+
+          lastSavedRef.current = currentStateHash;
+
+          // Update sync status only if it was previously synced (to avoid unnecessary updates)
+          setSyncStatus((prev) => {
+            if (prev.isInSync === true) {
+              return {
+                ...prev,
+                isInSync: false,
+                needsSync: true,
+                syncAction: prev.dbExists ? "push" : "sync",
+              };
+            }
+            return prev;
+          });
+        } catch (error) {
+          console.error("Error saving to localStorage:", error);
+        }
+      }, 300); // 300ms debounce
     },
     [roomId, isOwner]
   );
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Push: Upload local data to server
   const handlePush = async () => {

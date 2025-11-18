@@ -241,12 +241,41 @@ export default function Home() {
     }
   };
 
-  const handleDeleteRoom = (roomId: string) => {
-    if (confirm("คุณต้องการลบห้องนี้หรือไม่?")) {
+  const handleDeleteRoom = async (roomId: string) => {
+    if (!confirm("คุณต้องการลบห้องนี้หรือไม่?")) {
+      return;
+    }
+
+    try {
+      // Try to delete from database first (always try, regardless of sync status)
+      try {
+        const response = await authenticatedFetch(`/api/rooms/${roomId}`, {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          // If room doesn't exist in DB (404), that's okay - continue with local deletion
+          if (response.status !== 404) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to delete room from server");
+          }
+        }
+      } catch (error) {
+        console.error("Error deleting room from server:", error);
+        // Continue to delete locally even if server deletion fails
+        // This allows offline deletion
+      }
+
+      // Delete from localStorage
       deleteLocalRoom(roomId);
+      
+      // Refresh rooms list
       const updatedRooms = loadRoomsIndex();
       setRooms(updatedRooms);
       setFilteredRooms(updatedRooms);
+    } catch (error) {
+      console.error("Error deleting room:", error);
+      alert("ไม่สามารถลบห้องได้ กรุณาลองอีกครั้ง");
     }
   };
 

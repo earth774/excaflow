@@ -132,3 +132,67 @@ export async function PUT(
   }
 }
 
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> | { id: string } }
+) {
+  try {
+    const userId = await getUserIdFromRequest();
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const params = await Promise.resolve(context.params);
+    const id = params.id;
+    
+    let roomId = id;
+    if (!roomId) {
+      const url = new URL(request.url);
+      const pathParts = url.pathname.split("/");
+      const idIndex = pathParts.indexOf("rooms") + 1;
+      roomId = pathParts[idIndex];
+    }
+    
+    if (!roomId) {
+      return NextResponse.json(
+        { error: "Room ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if room exists and user owns it
+    const existingRoom = await prisma.room.findFirst({
+      where: {
+        id: roomId,
+        ownerId: userId,
+      },
+    });
+
+    if (!existingRoom) {
+      return NextResponse.json(
+        { error: "Room not found or you don't have permission to delete it" },
+        { status: 404 }
+      );
+    }
+
+    // Delete room from database
+    await prisma.room.delete({
+      where: {
+        id: roomId,
+      },
+    });
+
+    return NextResponse.json({ success: true, message: "Room deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting room:", error);
+    return NextResponse.json(
+      { error: "Failed to delete room" },
+      { status: 500 }
+    );
+  }
+}
+
