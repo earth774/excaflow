@@ -226,7 +226,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Sanitize prompt (basic validation)
-    const sanitizedPrompt = prompt.trim().slice(0, 1000); // Limit to 1000 characters
+    const trimmedPrompt = prompt.trim();
+    const sanitizedPrompt = trimmedPrompt ? trimmedPrompt.slice(0, 1000) : ""; // Limit to 1000 characters
+    
+    if (!sanitizedPrompt) {
+      return NextResponse.json(
+        { error: "Prompt is required and must be a non-empty string" },
+        { status: 400 }
+      );
+    }
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
@@ -282,7 +290,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate and sanitize elements
-    const sanitizedElements = elements
+    if (!elements || !Array.isArray(elements)) {
+      return NextResponse.json(
+        { error: "Invalid elements array in response" },
+        { status: 500 }
+      );
+    }
+
+    const sanitizedElements = (elements || [])
       .filter((el: unknown) => el && typeof el === "object" && el !== null)
       .map((el: Record<string, unknown>, index: number) => {
         // Ensure required fields exist

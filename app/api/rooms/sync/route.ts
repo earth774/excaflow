@@ -22,6 +22,26 @@ export async function POST(request: NextRequest) {
       files: body.scene.files || {},
     };
 
+    console.log("[sync] Syncing room:", {
+      roomId: body.id,
+      title: body.title,
+      filesCount: Object.keys(sceneWithFiles.files || {}).length,
+      fileIds: Object.keys(sceneWithFiles.files || {}),
+      sampleFile: sceneWithFiles.files && Object.keys(sceneWithFiles.files).length > 0
+        ? (() => {
+            const firstFileId = Object.keys(sceneWithFiles.files)[0];
+            const firstFile = (sceneWithFiles.files as any)[firstFileId];
+            return {
+              fileId: firstFileId,
+              hasDataURL: !!firstFile?.dataURL,
+              dataURLType: typeof firstFile?.dataURL,
+              dataURLPrefix: firstFile?.dataURL?.substring(0, 50),
+              isURL: firstFile?.dataURL?.startsWith("http"),
+            };
+          })()
+        : null,
+    });
+
     // Check if room exists and user owns it
     const existingRoom = await prisma.room.findFirst({
       where: {

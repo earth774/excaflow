@@ -21,3 +21,4 @@ export const getModelName = () => modelName;
 // Helper function to check if OpenAI is configured
 export const isOpenAIConfigured = () => !!apiKey;
 
+
