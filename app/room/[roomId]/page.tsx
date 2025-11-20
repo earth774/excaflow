@@ -21,8 +21,6 @@ const sanitizeAppState = (appState: any = {}) => {
 };
 
 // Sanitize files to ensure dataURLs are valid (base64 strings or URLs)
-// Accepts both data: URLs (base64) and http/https/blob URLs (from Supabase Storage)
-// This function never throws - it always returns a valid object, skipping invalid files
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sanitizeFiles = (files: any = {}): any => {
   try {
@@ -138,7 +136,6 @@ const sanitizeFiles = (files: any = {}): any => {
 };
 
 // Helper function to convert blob URLs or other URLs to base64 data URL
-// This ensures we have base64 data for Excalidraw when needed
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function ensureBase64DataURL(file: any): Promise<string | null> {
   if (!file || !file.dataURL || typeof file.dataURL !== "string") {
@@ -183,64 +180,6 @@ async function ensureBase64DataURL(file: any): Promise<string | null> {
   return null;
 }
 
-// Create persistable files object by removing base64 data URLs
-// Keeps metadata and Supabase URLs, but removes large base64 strings
-// This prevents localStorage quota issues
-// Flow: Excalidraw creates files with base64 → upload to Supabase → store URL in scene → load converts URL back to base64
-// When saving to localStorage, we remove base64 data URLs (data:) but keep URLs (http/https/blob)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const makePersistableFiles = (files: any = {}): any => {
-  if (!files || typeof files !== "object") {
-    return {};
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const persistable: any = {};
-  
-  for (const [fileId, file] of Object.entries(files)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fileData = file as any;
-    
-    if (!fileData || typeof fileData !== "object") {
-      continue;
-    }
-
-    // Copy all file properties except dataURL (we'll handle it separately)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const persistableFile: any = {};
-    for (const [key, value] of Object.entries(fileData)) {
-      if (key !== "dataURL") {
-        persistableFile[key] = value;
-      }
-    }
-
-    // Priority: Use supabaseUrl if available (file already uploaded)
-    // Otherwise, use dataURL if it's a URL (not base64)
-    // Remove base64 data URLs to save localStorage space
-    if (fileData.supabaseUrl && typeof fileData.supabaseUrl === "string") {
-      // File already uploaded to Supabase - use the URL
-      persistableFile.dataURL = fileData.supabaseUrl;
-      persistableFile.supabaseUrl = fileData.supabaseUrl;
-    } else if (fileData.dataURL && typeof fileData.dataURL === "string") {
-      const dataURL = String(fileData.dataURL);
-      if (
-        dataURL.startsWith("http://") ||
-        dataURL.startsWith("https://") ||
-        dataURL.startsWith("blob:")
-      ) {
-        // Keep URL from Supabase Storage or blob URL
-        persistableFile.dataURL = dataURL;
-      }
-      // If it's a data: URL (base64), don't include it - it will be uploaded separately
-      // The base64 will be removed, and when uploaded, supabaseUrl will be set
-    }
-
-    persistable[fileId] = persistableFile;
-  }
-
-  return persistable;
-};
-
 // Dynamic import Excalidraw with SSR disabled
 const Excalidraw = dynamic(
   async () => {
@@ -251,7 +190,7 @@ const Excalidraw = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex items-center justify-center h-full">
-        <div className="text-lg">กำลังโหลด Excalidraw...</div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
       </div>
     ),
   }
@@ -280,7 +219,6 @@ export default function RoomPage() {
   });
   const [isSyncing, setIsSyncing] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [initialScene, setInitialScene] = useState<ExcalidrawScene | null>(null);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflictInfo, setConflictInfo] = useState<{
@@ -295,6 +233,7 @@ export default function RoomPage() {
   const [uploadErrors, setUploadErrors] = useState<Map<string, string>>(new Map());
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   const [uploadedFiles, setUploadedFiles] = useState<Set<string>>(new Set());
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   
   // Track current initialScene files to detect changes without causing re-renders
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -311,7 +250,6 @@ export default function RoomPage() {
       const filesBeforeSanitize = scene.files || {};
       
       // Convert URLs (from Supabase Storage) to base64 for Excalidraw to display
-      // Flow: Files stored with Supabase URL → convert to base64 when loading → Excalidraw displays
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const filesWithBase64: any = {};
       for (const [fileId, file] of Object.entries(filesBeforeSanitize)) {
@@ -322,7 +260,6 @@ export default function RoomPage() {
         }
         
         // If file has URL (http/https/blob) but not base64, convert URL to base64
-        // Excalidraw requires base64 data URLs to display images
         if (fileData.dataURL && typeof fileData.dataURL === "string") {
           const dataURL = String(fileData.dataURL);
           
@@ -339,7 +276,6 @@ export default function RoomPage() {
             dataURL.startsWith("blob:")
           ) {
             try {
-              console.log(`[prepareInitialScene] Converting URL to base64 for ${fileId}`);
               const base64DataURL = await ensureBase64DataURL(fileData);
               
               if (base64DataURL) {
@@ -349,10 +285,8 @@ export default function RoomPage() {
                   dataURL: base64DataURL,
                   supabaseUrl: fileData.supabaseUrl || dataURL,
                 };
-                console.log(`[prepareInitialScene] Converted URL to base64 for ${fileId}`);
                 continue;
               } else {
-                console.warn(`[prepareInitialScene] Failed to convert URL to base64 for ${fileId}, keeping URL`);
                 // Keep URL as fallback (Excalidraw might handle it)
                 filesWithBase64[fileId] = fileData;
                 continue;
@@ -371,14 +305,6 @@ export default function RoomPage() {
       }
       
       const sanitizedFiles = sanitizeFiles(filesWithBase64);
-      
-      console.log("[prepareInitialScene] Preparing scene:", {
-        roomId: room.id,
-        filesBeforeSanitizeCount: Object.keys(filesBeforeSanitize).length,
-        filesAfterSanitizeCount: Object.keys(sanitizedFiles).length,
-        fileIdsBefore: Object.keys(filesBeforeSanitize),
-        fileIdsAfter: Object.keys(sanitizedFiles),
-      });
       
       return {
         elements: Array.isArray(scene.elements) ? scene.elements : [],
@@ -445,7 +371,7 @@ export default function RoomPage() {
             
             // Compare timestamps
             if (localUpdatedAt !== dbUpdatedAt) {
-              // Conflict detected - show dialog when user clicks "ตรวจสอบ"
+              // Conflict detected
               setConflictInfo({
                 localUpdatedAt: localUpdatedAt,
                 serverUpdatedAt: dbUpdatedAt,
@@ -469,26 +395,13 @@ export default function RoomPage() {
               });
             } else {
               // In sync - merge files from localDraft and DB
-              // Local files might have newer uploads that haven't been synced yet
               const dbFiles = sanitizeFiles(dbRoom.scene?.files || {});
               const localFiles = localDraft?.scene?.files || {};
               
-              // Merge files: prefer local files (they might have Supabase URLs from recent uploads)
-              // but also include any files from DB that aren't in local
               const mergedFiles = {
                 ...dbFiles,
                 ...localFiles, // Local files override DB files (they're more recent)
               };
-              
-              console.log("[loadRoom] Merging files for synced room:", {
-                roomId: dbRoom.id,
-                dbFilesCount: Object.keys(dbFiles).length,
-                localFilesCount: Object.keys(localFiles).length,
-                mergedFilesCount: Object.keys(mergedFiles).length,
-                dbFileIds: Object.keys(dbFiles),
-                localFileIds: Object.keys(localFiles),
-                mergedFileIds: Object.keys(mergedFiles),
-              });
               
               const roomToUse = localDraft ? {
                 ...localDraft,
@@ -637,8 +550,6 @@ export default function RoomPage() {
   const lastSavedRef = useRef<string>("");
 
   // Upload file to Supabase Storage
-  // Flow: Excalidraw creates files with base64 → upload to Supabase → store URL in scene → load converts URL back to base64
-  // This keeps localStorage small (URLs instead of large base64 strings) while ensuring Excalidraw can display images
   const uploadFileToSupabase = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (fileId: string, file: any, roomId: string) => {
@@ -647,7 +558,6 @@ export default function RoomPage() {
         uploadedFileIdsRef.current.has(fileId) ||
         uploadingFileIdsRef.current.has(fileId)
       ) {
-        console.log(`[uploadFileToSupabase] Skipping ${fileId} - already uploaded or uploading`);
         return;
       }
 
@@ -657,27 +567,13 @@ export default function RoomPage() {
         typeof file.dataURL !== "string" ||
         !file.dataURL.startsWith("data:")
       ) {
-        console.log(`[uploadFileToSupabase] Skipping ${fileId} - not a base64 data URL:`, {
-          hasDataURL: !!file.dataURL,
-          dataURLType: typeof file.dataURL,
-          dataURLPrefix: file.dataURL?.substring(0, 20),
-        });
         return;
       }
 
       // Skip if no mimeType
       if (!file.mimeType) {
-        console.warn(`[uploadFileToSupabase] File ${fileId} missing mimeType, skipping upload`);
         return;
       }
-
-      console.log(`[uploadFileToSupabase] Starting upload for file ${fileId}:`, {
-        roomId,
-        fileId,
-        mimeType: file.mimeType,
-        dataURLLength: file.dataURL.length,
-        dataURLPrefix: file.dataURL.substring(0, 50),
-      });
 
       uploadingFileIdsRef.current.add(fileId);
       setUploadingFiles((prev) => new Set(prev).add(fileId));
@@ -701,25 +597,14 @@ export default function RoomPage() {
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           const errorMessage = errorData.error || "Failed to upload file";
-          console.error(`[uploadFileToSupabase] Upload failed for ${fileId}:`, {
-            status: response.status,
-            error: errorMessage,
-          });
           throw new Error(errorMessage);
         }
 
         const { url } = await response.json();
-        console.log(`[uploadFileToSupabase] Upload successful for ${fileId}:`, {
-          url,
-        });
 
         // Update local room scene with Supabase URL converted to base64
-        // IMPORTANT: Excalidraw needs base64 data URL to display images immediately
-        // We convert URL to base64 here so Excalidraw can show the image right away
-        // The URL is stored separately in supabaseUrl for persistence (will be used when saving to localStorage)
         const currentRoom = loadLocalRoom(roomId);
         if (currentRoom) {
-          console.log(`[uploadFileToSupabase] Converting Supabase URL to base64 for ${fileId}`);
           
           // Convert Supabase URL to base64 data URL for Excalidraw to display immediately
           let base64DataURL: string | null = null;
@@ -739,9 +624,7 @@ export default function RoomPage() {
                 reader.onerror = reject;
                 reader.readAsDataURL(blob);
               });
-              console.log(`[uploadFileToSupabase] Converted URL to base64 for ${fileId}`);
             } else {
-              console.warn(`[uploadFileToSupabase] Failed to fetch image from URL: ${url}`);
               throw new Error(`Failed to fetch image: ${imageResponse.status}`);
             }
           } catch (error) {
@@ -764,15 +647,6 @@ export default function RoomPage() {
             },
           };
 
-          console.log(`[uploadFileToSupabase] Files before update:`, {
-            fileIds: Object.keys(currentRoom.scene.files || {}),
-            targetFileId: fileId,
-            targetFileBefore: currentRoom.scene.files?.[fileId] ? {
-              hasDataURL: !!currentRoom.scene.files[fileId].dataURL,
-              dataURLType: typeof currentRoom.scene.files[fileId].dataURL,
-            } : "not found",
-          });
-
           updateLocalRoomScene(roomId, {
             ...currentRoom.scene,
             files: updatedFiles,
@@ -781,422 +655,180 @@ export default function RoomPage() {
           // Verify the update
           const updatedRoom = loadLocalRoom(roomId);
           if (updatedRoom && updatedRoom.scene.files?.[fileId]) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const updatedFile = updatedRoom.scene.files[fileId] as any;
-            console.log(`[uploadFileToSupabase] Files after update:`, {
-              fileIds: Object.keys(updatedRoom.scene.files || {}),
-              targetFileId: fileId,
-              targetFileAfter: {
-                hasDataURL: !!updatedFile.dataURL,
-                dataURL: updatedFile.dataURL?.substring(0, 50),
-                isURL: updatedFile.dataURL?.startsWith("http"),
-              },
-            });
-
             // Update localRoom state and initialScene to reflect the change
-            // This ensures Excalidraw shows the uploaded file immediately
             setLocalRoom(updatedRoom);
             prepareInitialScene(updatedRoom).then((newScene) => {
               setInitialScene(newScene);
-              initialSceneFilesRef.current = newScene.files || {}; // Update ref
-              console.log(`[uploadFileToSupabase] Updated initialScene with uploaded file ${fileId}`);
+              initialSceneFilesRef.current = newScene.files || {};
             });
-          } else {
-            console.error(`[uploadFileToSupabase] Failed to verify update for ${fileId}`);
           }
-
-          // Mark as uploaded
-          uploadedFileIdsRef.current.add(fileId);
-          setUploadedFiles((prev) => new Set(prev).add(fileId));
-          setUploadingFiles((prev) => {
-            const next = new Set(prev);
-            next.delete(fileId);
-            return next;
-          });
-          console.log(`[uploadFileToSupabase] Marked ${fileId} as uploaded`);
-        } else {
-          console.error(`[uploadFileToSupabase] Room not found in localStorage: ${roomId}`);
-          throw new Error("Room not found in localStorage");
         }
+
+        uploadedFileIdsRef.current.add(fileId);
+        setUploadedFiles((prev) => new Set(prev).add(fileId));
       } catch (error) {
-        console.error(`[uploadFileToSupabase] Error uploading file ${fileId}:`, error);
-        const errorMessage = error instanceof Error ? error.message : "Failed to upload file";
+        console.error(`[uploadFileToSupabase] Error uploading ${fileId}:`, error);
         setUploadErrors((prev) => {
           const next = new Map(prev);
-          next.set(fileId, errorMessage);
+          next.set(fileId, error instanceof Error ? error.message : "Unknown error");
           return next;
         });
+      } finally {
+        uploadingFileIdsRef.current.delete(fileId);
         setUploadingFiles((prev) => {
           const next = new Set(prev);
           next.delete(fileId);
           return next;
         });
-        // Show user-friendly error (non-blocking)
-        // Don't block the UI - user can continue working
-      } finally {
-        uploadingFileIdsRef.current.delete(fileId);
       }
     },
-    [prepareInitialScene]
+    []
   );
 
-  // Auto-save to localStorage with debounce to prevent infinite loops
+  // Handle Excalidraw changes
   const handleChange = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (elements: readonly any[], appState: any, files: any) => {
-      // Don't save if not owner (read-only mode)
-      if (!isOwner) {
-        return;
-      }
-      
-      // Clean appState before saving - remove runtime-only properties
-      const cleanAppState = sanitizeAppState(appState);
+      if (!localRoom) return;
 
-      // Create persistable files (without base64 data URLs) for localStorage
-      // This prevents localStorage quota issues
-      const persistableFiles = makePersistableFiles(files);
-
-      // Log files info for debugging
-      if (files && Object.keys(files).length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const firstFile = Object.values(files)[0] as any;
-        console.log("Files detected:", {
-          count: Object.keys(files).length,
-          keys: Object.keys(files),
-          sampleFile: firstFile ? {
-            id: firstFile?.id,
-            mimeType: firstFile?.mimeType,
-            dataURL: firstFile?.dataURL ? (firstFile.dataURL.startsWith("data:") ? "base64" : "url") : "missing",
-          } : null,
-        });
-      }
-
-      // Create a hash of the current state to avoid saving if nothing changed
-      // Include element positions and IDs to detect moves, not just counts
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const elementsHash = elements.map((el: any) => ({
-        id: el.id,
-        x: el.x,
-        y: el.y,
-        width: el.width,
-        height: el.height,
-        angle: el.angle,
-        type: el.type,
-      }));
-      
-      const currentStateHash = JSON.stringify({
-        elements: elementsHash,
-        elementsCount: elements.length,
-        appStateKeys: Object.keys(cleanAppState).length,
-        filesCount: Object.keys(persistableFiles).length,
-      });
-
-      // Skip if state hasn't changed
-      if (currentStateHash === lastSavedRef.current) {
-        return;
-      }
-
-      // Clear existing timeout
+      // Debounce save
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
 
-      // Debounce the save operation to prevent excessive updates
-      saveTimeoutRef.current = setTimeout(() => {
-        try {
-          // Merge persistableFiles with files that are currently being uploaded
-          // This ensures files being uploaded aren't lost from localStorage
-          const filesToSave = { ...persistableFiles };
-          
-          // Keep files that are currently being uploaded (even if they have base64)
-          // This prevents race conditions where handleChange removes the file
-          // before upload completes
-          if (files && typeof files === "object") {
-            for (const [fileId, file] of Object.entries(files)) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const fileData = file as any;
-              if (
-                uploadingFileIdsRef.current.has(fileId) &&
-                fileData &&
-                fileData.dataURL &&
-                typeof fileData.dataURL === "string"
-              ) {
-                // File is being uploaded - keep it in localStorage temporarily
-                // but use persistable version (without base64) if available
-                if (!filesToSave[fileId]) {
-                  // Create persistable version without base64
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const persistableFile: any = {};
-                  for (const [key, value] of Object.entries(fileData)) {
-                    if (key !== "dataURL") {
-                      persistableFile[key] = value;
-                    }
-                  }
-                  filesToSave[fileId] = persistableFile;
-                }
-              }
-            }
-          }
+      saveTimeoutRef.current = setTimeout(async () => {
+        // Check if content actually changed
+        const currentContent = JSON.stringify({ elements, appState, files });
+        if (currentContent === lastSavedRef.current) {
+          return;
+        }
+        lastSavedRef.current = currentContent;
 
-          // Update local room scene immediately (auto-save)
-          // Use filesToSave which includes files being uploaded (persistable, without base64)
-          updateLocalRoomScene(roomId, {
-            elements,
-            appState: cleanAppState,
-            files: filesToSave,
-          });
-
-          // IMPORTANT: Update localRoom state to reflect the latest changes
-          // This ensures handlePush will use the most recent scene data
-          // Flow: Excalidraw → handleChange → update localStorage → update state → handlePush uses latest
-          const updatedLocalRoom = loadLocalRoom(roomId);
-          if (updatedLocalRoom) {
-            setLocalRoom(updatedLocalRoom);
-          }
-
-          // IMPORTANT: Update initialScene with files that have base64 for Excalidraw to display
-          // Excalidraw needs base64 data URLs to show images, so we keep them in memory
-          // But we save URLs to localStorage to save space
-          // This ensures Excalidraw can display images immediately while localStorage stays small
-          // Only update if files actually changed to avoid unnecessary re-renders and page refreshes
-          if (files && typeof files === "object" && Object.keys(files).length > 0) {
-            const sanitizedFiles = sanitizeFiles(files);
-            // Check if files actually changed (compare file IDs using ref to avoid dependency issues)
-            const currentFileIds = Object.keys(initialSceneFilesRef.current || {}).sort().join(",");
-            const newFileIds = Object.keys(sanitizedFiles).sort().join(",");
+        // Check for new files to upload
+        if (files && isOwner) {
+          for (const [fileId, file] of Object.entries(files)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fileData = file as any;
             
-            // Only update if file IDs actually changed (not just because files exist)
-            // This prevents unnecessary re-renders that cause page refreshes
-            if (currentFileIds !== newFileIds) {
-              // Create a scene with files that have base64 (for Excalidraw display)
-              const sceneWithBase64: ExcalidrawScene = {
-                elements,
-                appState: cleanAppState,
-                files: sanitizedFiles, // Use sanitized files with base64
-              };
-              setInitialScene(sceneWithBase64);
-              initialSceneFilesRef.current = sanitizedFiles; // Update ref
+            // If file has dataURL (base64) and not yet uploaded, upload it
+            if (
+              fileData.dataURL && 
+              fileData.dataURL.startsWith("data:") && 
+              !uploadedFileIdsRef.current.has(fileId) &&
+              !uploadingFileIdsRef.current.has(fileId)
+            ) {
+              // Upload in background
+              uploadFileToSupabase(fileId, fileData, roomId);
             }
-          } else if (files && typeof files === "object" && Object.keys(files).length === 0) {
-            // If files were removed (empty object), update to reflect that
-            const currentFileIds = Object.keys(initialSceneFilesRef.current || {}).sort().join(",");
-            if (currentFileIds !== "") {
-              const sceneWithBase64: ExcalidrawScene = {
-                elements,
-                appState: cleanAppState,
-                files: {}, // No files
-              };
-              setInitialScene(sceneWithBase64);
-              initialSceneFilesRef.current = {}; // Update ref
-            }
-          }
-
-          lastSavedRef.current = currentStateHash;
-
-          // Update sync status only if it was previously synced (to avoid unnecessary updates)
-          setSyncStatus((prev) => {
-            if (prev.isInSync === true) {
-              return {
-                ...prev,
-                isInSync: false,
-                needsSync: true,
-                syncAction: prev.dbExists ? "push" : "sync",
-              };
-            }
-            return prev;
-          });
-
-          // Upload files with base64 data URLs to Supabase Storage (async, non-blocking)
-          // Excalidraw typically provides base64 data URLs when files are added via drag & drop
-          // If we get blob URLs, we convert them to base64 first before uploading
-          if (files && typeof files === "object") {
-            for (const [fileId, file] of Object.entries(files)) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const fileData = file as any;
-              if (!fileData || !fileData.dataURL || typeof fileData.dataURL !== "string") {
-                continue;
-              }
-
-              const dataURL = fileData.dataURL;
-
-              // If it's already a base64 data URL, upload directly
-              if (dataURL.startsWith("data:")) {
-                // Upload asynchronously (don't await - non-blocking)
-                uploadFileToSupabase(fileId, fileData, roomId).catch((error) => {
-                  console.error(`Failed to upload file ${fileId}:`, error);
-                });
-              } else if (dataURL.startsWith("blob:")) {
-                // Convert blob URL to base64, then upload
-                // This handles cases where Excalidraw might provide blob URLs
-                ensureBase64DataURL(fileData)
-                  .then((base64DataURL) => {
-                    if (base64DataURL) {
-                      const fileWithBase64 = {
-                        ...fileData,
-                        dataURL: base64DataURL,
-                      };
-                      return uploadFileToSupabase(fileId, fileWithBase64, roomId);
-                    }
-                  })
-                  .catch((error) => {
-                    console.error(`Failed to convert blob URL to base64 for file ${fileId}:`, error);
-                  });
-              }
-              // If it's already an http/https URL (from Supabase), skip upload (already uploaded)
-            }
-          }
-        } catch (error) {
-          console.error("Error saving to localStorage:", error);
-          // Check if it's a quota exceeded error
-          if (error instanceof DOMException && error.code === 22) {
-            console.error("localStorage quota exceeded! Consider uploading files to Supabase.");
           }
         }
-      }, 300); // 300ms debounce
+
+        const updatedRoom: LocalRoom = {
+          ...localRoom,
+          scene: {
+            elements: [...elements],
+            appState: sanitizeAppState(appState),
+            files: sanitizeFiles(files),
+          },
+          updatedAt: new Date().toISOString(),
+          status: localRoom.status === "synced" ? "synced" : "local-only",
+          // If synced, mark as needing sync since we changed it locally
+          // But keep status as 'synced' to indicate it IS a synced room
+        };
+
+        saveLocalRoom(updatedRoom);
+        setLocalRoom(updatedRoom);
+        
+        // If room is synced, update sync status to show it needs sync
+        if (syncStatus.status === "synced" || syncStatus.dbExists) {
+          setSyncStatus((prev) => ({
+            ...prev,
+            needsSync: true,
+            isInSync: false,
+          }));
+        }
+      }, 500); // 500ms debounce
     },
-    [roomId, isOwner, uploadFileToSupabase]
+    [localRoom, roomId, syncStatus.status, syncStatus.dbExists, isOwner, uploadFileToSupabase]
   );
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // Push: Upload local data to server
-  // IMPORTANT: Always use the latest room data from localStorage to ensure we push the most recent changes
-  // Flow: Excalidraw → handleChange → update localStorage → update state → handlePush loads latest → push to server
+  // Sync: Push local to server
   const handlePush = async () => {
-    if (isSyncing || !localRoom || !isOwner) return; // Only owners can push
+    if (isSyncing || !localRoom || !isOwner) return;
 
     setIsSyncing(true);
     try {
-      // Load the latest room data from localStorage to ensure we have the most recent scene
-      // This handles edge cases where state might not be updated yet
-      const roomForPush = loadLocalRoom(localRoom.id) ?? localRoom;
+      // Prepare data for server
+      // We need to ensure files are handled correctly
+      // 1. Files with supabaseUrl should use that URL
+      // 2. Files with base64 dataURL should have been uploaded already, but if not, we might need to upload them
+      // For now, we assume background upload handles most cases.
+      // The server expects 'files' object where dataURL can be a URL string
       
-      console.log("[handlePush] Using room data:", {
-        fromState: localRoom.id === roomForPush.id,
-        stateUpdatedAt: localRoom.updatedAt,
-        localStorageUpdatedAt: roomForPush.updatedAt,
-        elementsCount: roomForPush.scene.elements?.length || 0,
-        filesCount: Object.keys(roomForPush.scene.files || {}).length,
-      });
-
-      // Sanitize scene before syncing
-      const sceneToSync: ExcalidrawScene = {
-        elements: roomForPush.scene.elements || [],
-        appState: sanitizeAppState(roomForPush.scene.appState || {}),
-        files: sanitizeFiles(roomForPush.scene.files || {}),
+      const sceneToSave = {
+        ...localRoom.scene,
+        files: sanitizeFiles(localRoom.scene.files),
       };
 
-      console.log("[handlePush] Pushing room to server:", {
-        roomId: localRoom.id,
-        filesCount: Object.keys(sceneToSync.files || {}).length,
-        fileIds: Object.keys(sceneToSync.files || {}),
-        sampleFile: sceneToSync.files && Object.keys(sceneToSync.files).length > 0
-          ? (() => {
-              const firstFileId = Object.keys(sceneToSync.files)[0];
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const firstFile = (sceneToSync.files as any)[firstFileId];
-              return {
-                fileId: firstFileId,
-                hasDataURL: !!firstFile?.dataURL,
-                dataURLType: typeof firstFile?.dataURL,
-                dataURLPrefix: firstFile?.dataURL?.substring(0, 50),
-                isURL: firstFile?.dataURL?.startsWith("http"),
-              };
-            })()
-          : null,
-      });
-
-      const response = await authenticatedFetch("/api/rooms/sync", {
-        method: "POST",
+      const response = await authenticatedFetch(`/api/rooms/${roomId}`, {
+        method: "PUT",
         body: JSON.stringify({
-          id: roomForPush.id,
-          title: roomForPush.title,
-          description: roomForPush.description,
-          scene: sceneToSync,
-          updatedAt: roomForPush.updatedAt, // Use latest timestamp from localStorage
+          title: localRoom.title,
+          description: localRoom.description,
+          scene: sceneToSave,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to push room");
+        throw new Error("Failed to sync room");
       }
 
-      const syncedRoom = await response.json();
+      const updatedDbRoom = await response.json();
+      const newUpdatedAt = new Date(updatedDbRoom.updatedAt).toISOString();
 
-      // Sanitize scene from server response before saving
-      const sanitizedSyncedScene: ExcalidrawScene = {
-        elements: syncedRoom.scene?.elements || [],
-        appState: sanitizeAppState(syncedRoom.scene?.appState || {}),
-        files: sanitizeFiles(syncedRoom.scene?.files || {}),
-      };
-
-      // Update localStorage with synced data
-      // Use roomForPush as base to preserve any metadata that might have changed locally
-      const updatedRoom: LocalRoom = {
-        ...roomForPush,
-        scene: sanitizedSyncedScene,
-        updatedAt: new Date(syncedRoom.updatedAt).toISOString(),
-        lastSyncedAt: syncedRoom.lastSyncedAt
-          ? new Date(syncedRoom.lastSyncedAt).toISOString()
-          : new Date().toISOString(),
+      // Update local room
+      const updatedLocalRoom: LocalRoom = {
+        ...localRoom,
+        updatedAt: newUpdatedAt,
+        lastSyncedAt: newUpdatedAt,
         status: "synced",
       };
-      saveLocalRoom(updatedRoom);
 
-      setLocalRoom(updatedRoom);
-      
-      // Update initialScene to reflect synced data (with URLs converted to base64 for Excalidraw)
-      prepareInitialScene(updatedRoom).then((scene) => {
-        setInitialScene(scene);
-        initialSceneFilesRef.current = scene.files || {}; // Update ref
-      });
-      
+      saveLocalRoom(updatedLocalRoom);
+      setLocalRoom(updatedLocalRoom);
       setSyncStatus({
         status: "synced",
         needsSync: false,
-        lastSyncedAt: updatedRoom.lastSyncedAt,
+        lastSyncedAt: newUpdatedAt,
         dbExists: true,
         isInSync: true,
-        serverUpdatedAt: new Date(syncedRoom.updatedAt).toISOString(),
+        serverUpdatedAt: newUpdatedAt,
         syncAction: null,
       });
       setShowConflictDialog(false);
       setConflictInfo(null);
       
-      // Refresh page after successful push
-      window.location.reload();
     } catch (error) {
-      console.error("Error pushing room:", error);
-      alert("ไม่สามารถ push ห้องได้ กรุณาลองอีกครั้ง");
+      console.error("Error syncing room:", error);
+      alert("ไม่สามารถบันทึกข้อมูลได้ กรุณาลองอีกครั้ง");
     } finally {
       setIsSyncing(false);
     }
   };
 
-  // Check sync status by comparing with server
+  // Check Sync Status
   const handleCheckSync = async () => {
-    if (isSyncing || !localRoom || !isOwner) return; // Only owners can check sync
+    if (isSyncing || !localRoom || !isOwner) return;
 
     setIsSyncing(true);
     try {
       const response = await authenticatedFetch(`/api/rooms/${roomId}`);
 
       if (response.status === 404) {
-        // Room doesn't exist in DB
         setSyncStatus((prev) => ({
           ...prev,
           dbExists: false,
-          needsSync: true,
-          isInSync: false,
-          serverUpdatedAt: null,
           syncAction: "sync",
+          isInSync: null,
         }));
         setIsSyncing(false);
         return;
@@ -1217,7 +849,8 @@ export default function RoomPage() {
           localUpdatedAt,
           serverUpdatedAt: dbUpdatedAt,
         });
-        setShowConflictDialog(true);
+        // Instead of showing dialog immediately, just update status
+        // User can choose action from popover
         setSyncStatus({
           status: localRoom.status,
           needsSync: true,
@@ -1225,7 +858,7 @@ export default function RoomPage() {
           dbExists: true,
           isInSync: false,
           serverUpdatedAt: dbUpdatedAt,
-          syncAction: null, // User will choose
+          syncAction: null, 
         });
       } else {
         // In sync
@@ -1238,11 +871,9 @@ export default function RoomPage() {
           serverUpdatedAt: dbUpdatedAt,
           syncAction: null,
         });
-        alert("ข้อมูลตรงกันแล้ว");
       }
     } catch (error) {
       console.error("Error checking sync status:", error);
-      alert("ไม่สามารถตรวจสอบสถานะ sync ได้ กรุณาลองอีกครั้ง");
     } finally {
       setIsSyncing(false);
     }
@@ -1361,8 +992,6 @@ export default function RoomPage() {
       alert(`สร้างไดอะแกรมสำเร็จ! เพิ่ม ${newElements.length} elements`);
 
       // Refresh page to avoid infinite loop
-      // This is the safest way to prevent React update depth issues
-      // The page will reload with the new elements from localStorage
       setTimeout(() => {
         window.location.reload();
       }, 100);
@@ -1378,347 +1007,170 @@ export default function RoomPage() {
 
   if (!isClient || !localRoom || !initialScene) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">กำลังโหลด...</div>
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
+          <div className="text-gray-500 dark:text-gray-400">กำลังโหลดห้องวาดภาพ...</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+      
       {/* Sidebar */}
-      <div
-        className={`${
-          sidebarOpen ? "w-64" : "w-0"
-        } bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 overflow-hidden flex flex-col shadow-lg`}
-      >
+      <div className={`${sidebarOpen ? "w-64" : "w-0"} flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 overflow-hidden flex flex-col relative z-20`}>
+        
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
-              ห้องวาดภาพ
-            </h2>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-              aria-label="ปิด sidebar"
-            >
-              <svg
-                className="w-5 h-5 text-gray-600 dark:text-gray-300"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
+        <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <Link href="/" className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500 dark:text-gray-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-            </button>
+            </Link>
+            <h1 className="font-bold text-gray-800 dark:text-white truncate">
+              {localRoom.title}
+            </h1>
           </div>
-
-          {/* Room Name */}
-          {localRoom && (
-            <div className="mb-4">
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                ชื่อห้อง
-              </div>
-              <div className="text-base font-medium text-gray-800 dark:text-white truncate">
-                {localRoom.title}
-              </div>
-              {!isOwner && (
-                <div className="mt-2 px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs rounded">
-                  โหมดอ่านอย่างเดียว (Read Only)
-                </div>
-              )}
-            </div>
-          )}
+          <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
         </div>
 
         {/* Sidebar Content */}
-        <div className="flex-1 p-4 space-y-6 overflow-y-auto">
-          {/* Sync Status - Only show for owners */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          
+          {/* Room Info */}
+          <div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">ข้อมูลห้อง</div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">สถานะ</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  syncStatus.status === "synced" && syncStatus.isInSync !== false
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                    : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                }`}>
+                  {syncStatus.status === "synced" && syncStatus.isInSync !== false ? "Synced" : "Unsaved"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400">อัปเดตล่าสุด</span>
+                <span className="text-gray-700 dark:text-gray-300 text-xs">
+                  {new Date(localRoom.updatedAt).toLocaleTimeString("th-TH", { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              {!isOwner && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-xs p-2 rounded-lg">
+                  คุณอยู่ในโหมดอ่านอย่างเดียว
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
           {isOwner && (
             <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                สถานะ Sync
-              </div>
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">การจัดการ</div>
               <div className="space-y-2">
-                {syncStatus.status === "local-only" ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-yellow-600 dark:text-yellow-400 text-lg">
-                      ⚠️
-                    </span>
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      Local only
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-600 dark:text-green-400 text-lg">
-                      ✅
-                    </span>
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      Synced
-                    </span>
-                  </div>
-                )}
+                <button
+                  onClick={handlePush}
+                  disabled={isSyncing}
+                  className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
+                >
+                  <div className={`w-2 h-2 rounded-full ${isSyncing ? "bg-gray-400 animate-pulse" : "bg-blue-500"}`} />
+                  <span>{isSyncing ? "กำลังบันทึก..." : "บันทึกข้อมูล (Push)"}</span>
+                </button>
                 
-                {/* Sync Comparison Status */}
-                {syncStatus.dbExists && syncStatus.isInSync !== null && (
-                  <div className="mt-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700">
-                    {syncStatus.isInSync ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-600 dark:text-green-400 text-sm">
-                          ✓
-                        </span>
-                        <span className="text-xs text-gray-600 dark:text-gray-300">
-                          Local กับ Server เท่ากัน
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-yellow-600 dark:text-yellow-400 text-sm">
-                            ⚠
-                          </span>
-                          <span className="text-xs text-gray-600 dark:text-gray-300">
-                            Local กับ Server ต่างกัน
-                          </span>
-                        </div>
-                        {syncStatus.serverUpdatedAt && localRoom && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 pl-4">
-                            <div>Local: {new Date(localRoom.updatedAt).toLocaleString("th-TH", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}</div>
-                            <div>Server: {new Date(syncStatus.serverUpdatedAt).toLocaleString("th-TH", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}</div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                {syncStatus.lastSyncedAt && (
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Sync ล่าสุด:{" "}
-                    {new Date(syncStatus.lastSyncedAt).toLocaleString("th-TH", {
-                      year: "numeric",
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                )}
-                
-                {/* Check Sync Button */}
                 <button
                   onClick={handleCheckSync}
                   disabled={isSyncing}
-                  className="w-full px-4 py-2 bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white font-medium rounded-lg transition-colors text-sm mt-2"
+                  className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
                 >
-                  {isSyncing ? "กำลังตรวจสอบ..." : "ตรวจสอบ Sync"}
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>ตรวจสอบสถานะ Sync</span>
                 </button>
 
-                {/* Sync/Pull/Push Buttons */}
-                {syncStatus.syncAction === "sync" && syncStatus.dbExists !== null && (
-                  <button
-                    onClick={handlePush}
-                    disabled={isSyncing}
-                    className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-medium rounded-lg transition-colors text-sm mt-2"
-                  >
-                    {isSyncing ? "กำลัง sync..." : "Sync (สร้างใหม่)"}
-                  </button>
-                )}
-                {syncStatus.syncAction === "pull" && (
+                {syncStatus.dbExists && (
                   <button
                     onClick={handlePull}
                     disabled={isSyncing}
-                    className="w-full px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white font-medium rounded-lg transition-colors text-sm mt-2"
+                    className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
                   >
-                    {isSyncing ? "กำลัง pull..." : "Pull (ดึงจาก Server)"}
-                  </button>
-                )}
-                {syncStatus.syncAction === "push" && (
-                  <button
-                    onClick={handlePush}
-                    disabled={isSyncing}
-                    className="w-full px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium rounded-lg transition-colors text-sm mt-2"
-                  >
-                    {isSyncing ? "กำลัง push..." : "Push (อัปโหลดขึ้น Server)"}
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                    </svg>
+                    <span>ดึงข้อมูลจาก Server</span>
                   </button>
                 )}
               </div>
             </div>
           )}
 
-          {/* Auto-save Status - Only show for owners */}
-          {isOwner && (
+          {/* File Upload Status */}
+          {isOwner && (uploadingFiles.size > 0 || uploadErrors.size > 0) && (
             <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                สถานะการบันทึก
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-green-600 dark:text-green-400 text-lg">
-                  ✅
-                </span>
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  บันทึกอัตโนมัติลง LocalStorage
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* File Upload Status - Only show for owners */}
-          {isOwner && (uploadingFiles.size > 0 || uploadErrors.size > 0 || uploadedFiles.size > 0) && (
-            <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                สถานะการอัพโหลดไฟล์
-              </div>
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">การอัปโหลด</div>
               <div className="space-y-2">
                 {uploadingFiles.size > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-blue-600 dark:text-blue-400 text-sm">
-                      ⏳
-                    </span>
-                    <span className="text-xs text-gray-700 dark:text-gray-300">
-                      กำลังอัพโหลด {uploadingFiles.size} ไฟล์...
-                    </span>
+                  <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                    <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    กำลังอัปโหลด {uploadingFiles.size} ไฟล์...
                   </div>
                 )}
-                {uploadedFiles.size > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-600 dark:text-green-400 text-sm">
-                      ✅
-                    </span>
-                    <span className="text-xs text-gray-700 dark:text-gray-300">
-                      อัพโหลดสำเร็จ {uploadedFiles.size} ไฟล์
-                    </span>
+                {Array.from(uploadErrors.entries()).map(([fileId, error]) => (
+                  <div key={fileId} className="text-xs text-red-600 dark:text-red-400 flex items-center gap-2 truncate" title={error}>
+                    <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="truncate">{error}</span>
                   </div>
-                )}
-                {uploadErrors.size > 0 && (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-red-600 dark:text-red-400 text-sm">
-                        ❌
-                      </span>
-                      <span className="text-xs text-gray-700 dark:text-gray-300">
-                        อัพโหลดล้มเหลว {uploadErrors.size} ไฟล์
-                      </span>
-                    </div>
-                    {Array.from(uploadErrors.entries()).slice(0, 3).map(([fileId, error]) => (
-                      <div key={fileId} className="text-xs text-red-600 dark:text-red-400 pl-4 truncate" title={error}>
-                        {fileId.substring(0, 8)}...: {error.substring(0, 30)}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           )}
 
-          {/* Last Updated Time */}
-          {localRoom && (
-            <div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                อัปเดตล่าสุด
-              </div>
-              <div className="text-sm text-gray-700 dark:text-gray-300">
-                {new Date(localRoom.updatedAt).toLocaleString("th-TH", {
-                  year: "numeric",
-                  month: "2-digit",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* AI Generate Button - Only show for owners */}
-          {isOwner && (
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => setShowAIModal(true)}
-                className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
-                AI Generate Diagram
-              </button>
-            </div>
-          )}
-
-          {/* Back Button */}
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Link
-              href="/"
-              className="w-full px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                />
-              </svg>
-              กลับไปหน้าหลัก
-            </Link>
-          </div>
         </div>
+
+        {/* Sidebar Footer */}
+        {isOwner && (
+          <div className="p-4 border-t border-gray-100 dark:border-gray-700">
+            <button
+              onClick={() => setShowAIModal(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-medium rounded-xl transition-all shadow-lg shadow-violet-500/20"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>AI Generate</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col relative overflow-hidden">
-        {/* Toggle Sidebar Button */}
+      <div className="flex-1 relative h-full overflow-hidden">
+        
+        {/* Toggle Sidebar Button (Visible when sidebar closed) */}
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="absolute top-4 left-4 z-10 p-2 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg shadow-md transition-colors"
-            aria-label="เปิด sidebar"
+            className="absolute top-4 left-4 z-10 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300"
           >
-            <svg
-              className="w-5 h-5 text-gray-600 dark:text-gray-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
         )}
 
         {/* Excalidraw Canvas */}
-        <div className="flex-1 relative w-full h-full overflow-hidden">
+        <div className="absolute inset-0 z-0">
           {isClient && initialScene && (
             <Excalidraw
               key={`excalidraw-${roomId}`}
@@ -1727,11 +1179,8 @@ export default function RoomPage() {
               viewModeEnabled={!isOwner}
               UIOptions={{
                 canvasActions: {
-                  // Disable File System Access API features to prevent FileSystemFileHandle errors
-                  // We use our own room-based save/load system instead
                   saveToActiveFile: false,
                   loadScene: false,
-                  // Keep export enabled for owners (doesn't use File System Access API)
                   ...(isOwner ? {} : { export: false }),
                 },
               }}
@@ -1742,129 +1191,128 @@ export default function RoomPage() {
 
       {/* Conflict Dialog */}
       {showConflictDialog && conflictInfo && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-              พบว่าข้อมูลในเครื่องไม่ตรงกับข้อมูลในฐานข้อมูล
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-              คุณต้องการใช้ข้อมูลจากที่ไหน?
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-md w-full border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-4 text-amber-500">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                พบข้อมูลไม่ตรงกัน
+              </h3>
+            </div>
+            
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+              ข้อมูลในเครื่องของคุณไม่ตรงกับข้อมูลบน Server คุณต้องการใช้ข้อมูลชุดไหน?
             </p>
-            {conflictInfo && (
-              <div className="text-xs text-gray-500 dark:text-gray-400 mb-4 space-y-1">
-                <div>
-                  Local: {new Date(conflictInfo.localUpdatedAt).toLocaleString("th-TH", {
-                    year: "numeric",
-                    month: "2-digit",
-                    day: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-                <div>
-                  Server: {new Date(conflictInfo.serverUpdatedAt).toLocaleString("th-TH", {
-                    year: "numeric",
-                    month: "2-digit",
-                    day: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              </div>
-            )}
-            <div className="flex gap-3">
+
+            <div className="space-y-3">
               <button
                 onClick={handlePush}
                 disabled={isSyncing}
-                className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium rounded-lg transition-colors text-sm"
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl transition-all group"
               >
-                {isSyncing ? "กำลังบันทึก..." : "ใช้ข้อมูลในเครื่อง (บันทึกขึ้นฐานข้อมูล)"}
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">ใช้ข้อมูลในเครื่องนี้</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    อัปเดตเมื่อ: {new Date(conflictInfo.localUpdatedAt).toLocaleString("th-TH")}
+                  </div>
+                </div>
+                <div className="w-4 h-4 rounded-full border-2 border-gray-300 group-hover:border-blue-500" />
               </button>
+
               <button
                 onClick={handlePull}
                 disabled={isSyncing}
-                className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white font-medium rounded-lg transition-colors text-sm"
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl transition-all group"
               >
-                {isSyncing ? "กำลังดึง..." : "ใช้ข้อมูลจากฐานข้อมูล (ทับข้อมูลในเครื่อง)"}
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">ใช้ข้อมูลจาก Server</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    อัปเดตเมื่อ: {new Date(conflictInfo.serverUpdatedAt).toLocaleString("th-TH")}
+                  </div>
+                </div>
+                <div className="w-4 h-4 rounded-full border-2 border-gray-300 group-hover:border-green-500" />
               </button>
             </div>
+
             <button
               onClick={() => {
                 setShowConflictDialog(false);
                 setConflictInfo(null);
               }}
-              disabled={isSyncing}
-              className="w-full mt-3 px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-medium rounded-lg transition-colors text-sm"
+              className="w-full mt-6 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
             >
-              ยกเลิก
+              ยกเลิกและตัดสินใจภายหลัง
             </button>
           </div>
         </div>
       )}
 
-      {/* AI Generate Modal */}
+      {/* AI Modal */}
       {showAIModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-lg w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-              AI Generate Diagram
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-              อธิบายไดอะแกรมที่คุณต้องการสร้าง:
-            </p>
-            <textarea
-              value={aiPrompt}
-              onChange={(e) => setAIPrompt(e.target.value)}
-              placeholder="เช่น: สร้าง flowchart สำหรับ login process มี 3 ขั้นตอน Start, Login, Success"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white text-sm"
-              rows={4}
-              disabled={isGenerating}
-            />
-            {aiError && (
-              <div className="mt-3 p-3 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-lg text-sm">
-                {aiError}
-              </div>
-            )}
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={handleAIGenerate}
-                disabled={isGenerating || !aiPrompt.trim()}
-                className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-medium rounded-lg transition-colors text-sm"
-              >
-                {isGenerating ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    กำลังสร้าง...
-                  </span>
-                ) : (
-                  "สร้างไดอะแกรม"
-                )}
-              </button>
-              <button
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">
+                AI Generate Diagram
+              </h3>
+              <button 
                 onClick={() => {
                   setShowAIModal(false);
                   setAIPrompt("");
                   setAIError(null);
                 }}
-                disabled={isGenerating}
-                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white font-medium rounded-lg transition-colors text-sm"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
               >
-                ยกเลิก
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                อธิบายไดอะแกรมที่คุณต้องการ
+              </label>
+              <textarea
+                value={aiPrompt}
+                onChange={(e) => setAIPrompt(e.target.value)}
+                placeholder="เช่น: สร้าง flowchart สำหรับระบบ Login มี 3 ขั้นตอน Start, Login Form, Success..."
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 dark:text-white text-sm transition-all resize-none"
+                rows={4}
+                disabled={isGenerating}
+              />
+            </div>
+
+            {aiError && (
+              <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {aiError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleAIGenerate}
+                disabled={isGenerating || !aiPrompt.trim()}
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-50 text-white font-medium rounded-xl transition-all shadow-lg shadow-violet-500/20 flex items-center justify-center gap-2"
+              >
+                {isGenerating ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>กำลังสร้าง...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span>สร้างไดอะแกรม</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

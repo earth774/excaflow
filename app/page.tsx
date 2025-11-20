@@ -299,8 +299,11 @@ export default function Home() {
 
   if (!isClient || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="text-lg text-gray-600">กำลังโหลด...</div>
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600"></div>
+          <div className="text-lg text-gray-500 font-medium">Loading your space...</div>
+        </div>
       </div>
     );
   }
@@ -310,169 +313,208 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
-      <div className="container mx-auto max-w-6xl">
-        {/* Top Bar - User Info */}
-        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="text-gray-700 font-medium">{user.email}</div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors"
-            >
-              ออกจากระบบ
-            </button>
+    <div className="min-h-screen bg-gray-50">
+      {/* Navbar */}
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white p-2 rounded-lg">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-600 to-fuchsia-600">
+                Excalidraw Rooms
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="hidden md:flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                {user.email}
+              </div>
+              <button
+                onClick={handleLogout}
+                className="text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
+      </nav>
 
-        {/* Main Content Card */}
-        <div className="bg-white rounded-lg shadow-lg p-6 md:p-8">
-          {/* Header with Title and Create Button */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-            <h1 className="text-3xl md:text-4xl font-bold text-purple-600 mb-4 md:mb-0 flex items-center gap-3">
-              <span className="relative inline-block">
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" fill="#FF6B35" />
-                  <rect x="6" y="6" width="6" height="6" rx="1" fill="#F7B801" />
-                  <rect x="12" y="6" width="6" height="6" rx="1" fill="#4ECDC4" />
-                  <rect x="6" y="12" width="6" height="6" rx="1" fill="#45B7D1" />
-                  <rect x="12" y="12" width="6" height="6" rx="1" fill="#96CEB4" />
-                </svg>
-              </span>
-              Excalidraw Rooms
-            </h1>
-            <button
-              onClick={() => {
-                const name = prompt("ใส่ชื่อห้องใหม่:");
-                if (name && name.trim()) {
-                  handleCreateRoom(name.trim());
-                }
-              }}
-              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md transition-all whitespace-nowrap"
-            >
-              + สร้างห้องใหม่
-            </button>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Hero Section */}
+        <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Your Creative Space</h1>
+            <p className="mt-2 text-gray-600">Manage your drawings and collaborate with others.</p>
           </div>
+          <button
+            onClick={() => {
+              const name = prompt("Enter room name:");
+              if (name && name.trim()) {
+                handleCreateRoom(name.trim());
+              }
+            }}
+            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 transition-all transform hover:-translate-y-0.5"
+          >
+            <svg className="-ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create New Room
+          </button>
+        </div>
 
-          {/* Rooms List Header with Search */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-800 mb-3 md:mb-0">
-              ห้องที่มีอยู่
-            </h2>
+        {/* Search and Filter */}
+        <div className="mb-8">
+          <div className="relative max-w-lg">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+              </svg>
+            </div>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ค้นหาห้อง..."
-              className="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="Search rooms..."
+              className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent sm:text-sm shadow-sm transition-all"
             />
           </div>
+        </div>
 
-          {/* Rooms List */}
-          <div>
-            {filteredRooms.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <p className="text-lg mb-2">
-                  {searchQuery ? "ไม่พบห้องที่ค้นหา" : "ยังไม่มีห้อง"}
-                </p>
-                <p>
-                  {searchQuery
-                    ? "ลองค้นหาด้วยคำอื่น"
-                    : "สร้างห้องใหม่เพื่อเริ่มวาดภาพ"}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredRooms.map((room) => {
-                  const isSyncing = syncingRooms.has(room.id);
-                  const lastSynced = room.lastSyncedAt
-                    ? new Date(room.lastSyncedAt).toLocaleString("th-TH", {
-                        year: "numeric",
-                        month: "2-digit",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : null;
-
-                  return (
-                    <div
-                      key={room.id}
-                      className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-gray-800 text-lg">
-                              {room.title}
-                            </h3>
-                            {room.status === "local-only" ? (
-                              <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
-                                Local only
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
-                                Synced
-                              </span>
-                            )}
-                          </div>
-                          {lastSynced && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <span>💾</span>
-                              <span>Sync ล่าสุด: {lastSynced}</span>
-                            </div>
-                          )}
-                          {room.status === "local-only" && (
-                            <div className="flex items-center gap-2 text-sm text-yellow-600 mt-1">
-                              <span>⚠️</span>
-                              <span>ยังไม่ได้ sync ไปยัง server</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-2 ml-4">
-                          <Link
-                            href={`/room/${room.id}`}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-all text-sm whitespace-nowrap"
-                          >
-                            เข้าห้อง
-                          </Link>
-                          {room.status === "local-only" && (
-                            <button
-                              onClick={() => handleSyncRoom(room.id)}
-                              disabled={isSyncing}
-                              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-medium rounded-lg transition-colors text-sm whitespace-nowrap"
-                            >
-                              {isSyncing ? "กำลัง sync..." : "Sync"}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleEditRoom(room.id)}
-                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition-colors text-sm whitespace-nowrap"
-                          >
-                            แก้ไข
-                          </button>
-                          <button
-                            onClick={() => handleDeleteRoom(room.id)}
-                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors text-sm whitespace-nowrap"
-                          >
-                            ลบ
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+        {/* Rooms Grid */}
+        {filteredRooms.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
+            <div className="mx-auto h-24 w-24 text-gray-300 mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <h3 className="mt-2 text-lg font-medium text-gray-900">No rooms found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {searchQuery ? "Try adjusting your search terms." : "Get started by creating a new room."}
+            </p>
+            {!searchQuery && (
+              <div className="mt-6">
+                <button
+                  onClick={() => {
+                    const name = prompt("Enter room name:");
+                    if (name && name.trim()) {
+                      handleCreateRoom(name.trim());
+                    }
+                  }}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-violet-600 bg-violet-50 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500"
+                >
+                  <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                  </svg>
+                  Create Room
+                </button>
               </div>
             )}
           </div>
-        </div>
-      </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredRooms.map((room) => {
+              const isSyncing = syncingRooms.has(room.id);
+              const lastSynced = room.lastSyncedAt
+                ? new Date(room.lastSyncedAt).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "numeric",
+                  })
+                : null;
+
+              return (
+                <div
+                  key={room.id}
+                  className="group bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden"
+                >
+                  <div className="p-6 flex-1">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="p-2 bg-violet-50 rounded-lg text-violet-600 group-hover:bg-violet-100 transition-colors">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {room.status === "local-only" ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                            Local
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Synced
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate" title={room.title}>
+                      {room.title}
+                    </h3>
+                    
+                    <div className="text-sm text-gray-500 flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      {lastSynced ? `Synced ${lastSynced}` : "Not synced yet"}
+                    </div>
+                  </div>
+
+                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                    <Link
+                      href={`/room/${room.id}`}
+                      className="text-sm font-medium text-violet-600 hover:text-violet-700 transition-colors"
+                    >
+                      Open Room &rarr;
+                    </Link>
+                    
+                    <div className="flex items-center gap-1">
+                      {room.status === "local-only" && (
+                        <button
+                          onClick={() => handleSyncRoom(room.id)}
+                          disabled={isSyncing}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          title="Sync to server"
+                        >
+                          <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                          </svg>
+                        </button>
+                      )}
+                      
+                      <button
+                        onClick={() => handleEditRoom(room.id)}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                        title="Rename"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                      </button>
+                      
+                      <button
+                        onClick={() => handleDeleteRoom(room.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        title="Delete"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
