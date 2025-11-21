@@ -325,7 +325,7 @@ export default function Home() {
                 </svg>
               </div>
               <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-600 to-fuchsia-600">
-                Excalidraw Rooms
+                Excaflow Rooms
               </span>
             </div>
             <div className="flex items-center gap-4">
