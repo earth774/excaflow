@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import AuthCarousel from "@/components/AuthCarousel";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -53,24 +54,25 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex bg-white">
       {/* Left Side - Hero/Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-black items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-600/30 via-transparent to-fuchsia-600/30 z-10" />
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop')] bg-cover bg-center opacity-50" />
-        <div className="relative z-20 p-12 text-white max-w-xl">
-          <h2 className="text-5xl font-bold mb-6 leading-tight">
-            Start your journey with us.
-          </h2>
-          <p className="text-lg text-gray-300 mb-8">
-            Join thousands of users who are already building the future with our platform. 
-            Secure, fast, and designed for you.
-          </p>
-          <div className="flex gap-4">
-            <div className="h-2 w-12 bg-white rounded-full opacity-100" />
-            <div className="h-2 w-12 bg-white rounded-full opacity-30" />
-            <div className="h-2 w-12 bg-white rounded-full opacity-30" />
-          </div>
-        </div>
-      </div>
+      <AuthCarousel 
+        slides={[
+          {
+            image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop",
+            title: "Start your journey with us.",
+            description: "Join thousands of users who are already building the future with our platform. Secure, fast, and designed for you."
+          },
+          {
+            image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2670&auto=format&fit=crop",
+            title: "Collaborate in real-time.",
+            description: "Work together with your team seamlessly, no matter where you are. Experience the power of true collaboration."
+          },
+          {
+            image: "https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?q=80&w=2574&auto=format&fit=crop",
+            title: "Secure by design.",
+            description: "Your data is protected with enterprise-grade security. We prioritize your privacy and data integrity above all else."
+          }
+        ]} 
+      />
 
       {/* Right Side - Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24">
