@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserIdFromRequest } from "@/lib/supabaseServer";
+import { deleteRoomFolder } from "@/lib/supabaseStorage";
 
 export async function GET(
   request: NextRequest,
@@ -178,6 +179,9 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    // Delete room files from storage (best effort)
+    await deleteRoomFolder(roomId);
 
     // Delete room from database
     await prisma.room.delete({

@@ -235,6 +235,8 @@ export default function RoomPage() {
   const [uploadedFiles, setUploadedFiles] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(true);
   
+  const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
+  
   // Track current initialScene files to detect changes without causing re-renders
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const initialSceneFilesRef = useRef<Record<string, any>>({});
@@ -268,15 +270,27 @@ export default function RoomPage() {
             filesWithBase64[fileId] = fileData;
             continue;
           }
-          
-          // If it's a URL (http/https/blob), convert to base64
+        }
+        
+        // Check if we have a supabaseUrl but no valid dataURL (or dataURL is just the supabaseUrl)
+        // This happens when we optimized localStorage by stripping the base64 data
+        const urlToFetch = fileData.supabaseUrl || (typeof fileData.dataURL === "string" && !fileData.dataURL.startsWith("data:") ? fileData.dataURL : null);
+        
+        if (urlToFetch) {
+           // Use the URL to fetch and restore base64
+           const dataURL = urlToFetch;
+           
+           // Logic below handles fetching from URL
+
           if (
             dataURL.startsWith("http://") ||
             dataURL.startsWith("https://") ||
             dataURL.startsWith("blob:")
           ) {
             try {
-              const base64DataURL = await ensureBase64DataURL(fileData);
+              // Create a temp object with dataURL set to the URL we want to fetch
+              const tempFile = { ...fileData, dataURL: urlToFetch };
+              const base64DataURL = await ensureBase64DataURL(tempFile);
               
               if (base64DataURL) {
                 // Use base64 for display, keep URL for reference
@@ -364,7 +378,8 @@ export default function RoomPage() {
           setIsOwner(dbRoom.isOwner === true);
           
           // Check localStorage for draft (only if owner)
-          const localDraft = dbRoom.isOwner ? loadLocalRoom(roomId) : null;
+          // Await the async loadLocalRoom call
+          const localDraft = dbRoom.isOwner ? await loadLocalRoom(roomId) : null;
           
           if (localDraft) {
             const localUpdatedAt = new Date(localDraft.updatedAt).toISOString();
@@ -430,7 +445,7 @@ export default function RoomPage() {
               };
               
               // Always save merged room to localStorage
-              saveLocalRoom(roomToUse);
+              await saveLocalRoom(roomToUse);
               
               setLocalRoom(roomToUse);
               prepareInitialScene(roomToUse).then((scene) => {
@@ -466,7 +481,7 @@ export default function RoomPage() {
               status: "synced",
             };
             
-            saveLocalRoom(roomToUse);
+            await saveLocalRoom(roomToUse);
             setLocalRoom(roomToUse);
             prepareInitialScene(roomToUse).then((scene) => {
               setInitialScene(scene);
@@ -485,7 +500,7 @@ export default function RoomPage() {
           }
         } else if (dbResponse.status === 404) {
           // Room doesn't exist in DB - check localStorage
-          const localDraft = loadLocalRoom(roomId);
+          const localDraft = await loadLocalRoom(roomId);
           
           if (localDraft) {
             setLocalRoom(localDraft);
@@ -512,7 +527,7 @@ export default function RoomPage() {
       } catch (error) {
         console.error("Error loading room:", error);
         // Fallback to localStorage if API fails
-        const localDraft = loadLocalRoom(roomId);
+        const localDraft = await loadLocalRoom(roomId);
         if (localDraft) {
           setLocalRoom(localDraft);
           prepareInitialScene(localDraft).then((scene) => {
@@ -603,7 +618,7 @@ export default function RoomPage() {
         const { url } = await response.json();
 
         // Update local room scene with Supabase URL converted to base64
-        const currentRoom = loadLocalRoom(roomId);
+        const currentRoom = await loadLocalRoom(roomId);
         if (currentRoom) {
           
           // Convert Supabase URL to base64 data URL for Excalidraw to display immediately
@@ -647,13 +662,13 @@ export default function RoomPage() {
             },
           };
 
-          updateLocalRoomScene(roomId, {
+          await updateLocalRoomScene(roomId, {
             ...currentRoom.scene,
             files: updatedFiles,
           });
 
           // Verify the update
-          const updatedRoom = loadLocalRoom(roomId);
+          const updatedRoom = await loadLocalRoom(roomId);
           if (updatedRoom && updatedRoom.scene.files?.[fileId]) {
             // Update localRoom state and initialScene to reflect the change
             setLocalRoom(updatedRoom);
@@ -668,6 +683,12 @@ export default function RoomPage() {
         setUploadedFiles((prev) => new Set(prev).add(fileId));
       } catch (error) {
         console.error(`[uploadFileToSupabase] Error uploading ${fileId}:`, error);
+        
+        // Show alert to user
+        if (error instanceof Error) {
+          alert(error.message);
+        }
+        
         setUploadErrors((prev) => {
           const next = new Map(prev);
           next.set(fileId, error instanceof Error ? error.message : "Unknown error");
@@ -689,6 +710,58 @@ export default function RoomPage() {
   const handleChange = useCallback(
     (elements: readonly any[], appState: any, files: any) => {
       if (!localRoom) return;
+
+      // Check for large files (> 2MB)
+      if (files) {
+        let hasLargeFile = false;
+        const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+        
+        for (const [fileId, file] of Object.entries(files)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const fileData = file as any;
+          
+          // Check if file is new (not uploaded) and large
+          // We check dataURL length as a proxy. Base64 is ~1.33x larger than binary.
+          // So 2MB binary ~= 2.66MB base64.
+          // Let's be safe and check if base64 length > 2MB * 1.37 (approx 2.74MB)
+          // Or just check estimated size
+          
+          if (
+            fileData.dataURL && 
+            fileData.dataURL.startsWith("data:") && 
+            !uploadedFileIdsRef.current.has(fileId)
+          ) {
+            const base64Data = fileData.dataURL.split(",")[1];
+            if (base64Data) {
+              const estimatedSize = (base64Data.length * 3) / 4;
+              
+              if (estimatedSize > MAX_FILE_SIZE) {
+                hasLargeFile = true;
+                console.warn(`[handleChange] File ${fileId} is too large: ${(estimatedSize / 1024 / 1024).toFixed(2)}MB`);
+                
+                // Alert user
+                alert(`ไฟล์ขนาดใหญ่เกินไป (${(estimatedSize / 1024 / 1024).toFixed(2)}MB) กรุณาอัปโหลดไฟล์ขนาดไม่เกิน 2MB`);
+                
+                // Remove file and associated elements
+                if (excalidrawAPI) {
+                  const newFiles = { ...files };
+                  delete newFiles[fileId];
+                  
+                  const newElements = elements.filter((el) => el.fileId !== fileId);
+                  
+                  excalidrawAPI.updateScene({
+                    elements: newElements,
+                    files: newFiles,
+                  });
+                  
+                  // Return early to avoid saving this state
+                  return;
+                }
+              }
+            }
+          }
+        }
+      }
 
       // Debounce save
       if (saveTimeoutRef.current) {
@@ -730,12 +803,17 @@ export default function RoomPage() {
             files: sanitizeFiles(files),
           },
           updatedAt: new Date().toISOString(),
-          status: localRoom.status === "synced" ? "synced" : "local-only",
-          // If synced, mark as needing sync since we changed it locally
-          // But keep status as 'synced' to indicate it IS a synced room
+          // If previously synced, mark as local-only after update
+          status: localRoom.status === "synced" ? "local-only" : localRoom.status,
         };
 
-        saveLocalRoom(updatedRoom);
+        console.log("handleChange: Saving room:", roomId, {
+          elementsCount: elements.length,
+          hasAppState: !!appState,
+          hasFiles: !!files,
+        });
+
+        await saveLocalRoom(updatedRoom);
         setLocalRoom(updatedRoom);
         
         // If room is synced, update sync status to show it needs sync
@@ -748,7 +826,7 @@ export default function RoomPage() {
         }
       }, 500); // 500ms debounce
     },
-    [localRoom, roomId, syncStatus.status, syncStatus.dbExists, isOwner, uploadFileToSupabase]
+    [localRoom, roomId, syncStatus.status, syncStatus.dbExists, isOwner, uploadFileToSupabase, excalidrawAPI]
   );
 
   // Sync: Push local to server
@@ -1192,6 +1270,7 @@ export default function RoomPage() {
           {isClient && initialScene && (
             <Excalidraw
               key={`excalidraw-${roomId}`}
+              excalidrawAPI={(api) => setExcalidrawAPI(api)}
               onChange={handleChange}
               initialData={initialScene}
               viewModeEnabled={!isOwner}

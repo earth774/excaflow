@@ -1,3 +1,4 @@
+import { get, set, del } from "idb-keyval";
 import type {
   LocalRoom,
   RoomIndexEntry,
@@ -80,36 +81,88 @@ export function updateRoomInIndex(
 }
 
 // Individual Room Data Management
-export function loadLocalRoom(roomId: string): LocalRoom | null {
+export async function loadLocalRoom(roomId: string): Promise<LocalRoom | null> {
   if (typeof window === "undefined") return null;
 
   try {
-    const data = localStorage.getItem(`${ROOM_DATA_PREFIX}${roomId}`);
-    return data ? JSON.parse(data) : null;
+    // Try loading from IndexedDB first
+    const key = `${ROOM_DATA_PREFIX}${roomId}`;
+    const data = await get<LocalRoom>(key);
+    
+    if (data) {
+      return data;
+    }
+
+    // Fallback: Try loading from localStorage (migration path)
+    const localData = localStorage.getItem(key);
+    if (localData) {
+      try {
+        const parsedData = JSON.parse(localData);
+        // Migrate to IndexedDB
+        await set(key, parsedData);
+        // Optional: Remove from localStorage after successful migration
+        // localStorage.removeItem(key); 
+        return parsedData;
+      } catch (e) {
+        console.error("Error parsing localStorage data during migration:", e);
+      }
+    }
+
+    return null;
   } catch (error) {
     console.error("Error loading local room:", error);
     return null;
   }
 }
 
-export function saveLocalRoom(room: LocalRoom): void {
+export async function saveLocalRoom(room: LocalRoom): Promise<void> {
   if (typeof window === "undefined") {
     console.warn("saveLocalRoom: window is undefined");
     return;
   }
 
   try {
+    // Optimize storage: remove base64 dataURL if supabaseUrl exists
+    const roomToSave = { ...room };
+    if (roomToSave.scene && roomToSave.scene.files) {
+      const optimizedFiles: Record<string, any> = {};
+      let optimizedCount = 0;
+      
+      for (const [fileId, file] of Object.entries(roomToSave.scene.files)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fileData = file as any;
+        
+        if (fileData.supabaseUrl && fileData.dataURL && fileData.dataURL.startsWith("data:")) {
+          // Keep supabaseUrl, remove huge base64 dataURL
+          // We'll restore it from supabaseUrl when loading (in prepareInitialScene)
+          const { dataURL, ...rest } = fileData;
+          optimizedFiles[fileId] = rest;
+          optimizedCount++;
+        } else {
+          optimizedFiles[fileId] = fileData;
+        }
+      }
+      
+      if (optimizedCount > 0) {
+        roomToSave.scene = {
+          ...roomToSave.scene,
+          files: optimizedFiles,
+        };
+        console.log(`saveLocalRoom: Optimized ${optimizedCount} files by removing base64 data`);
+      }
+    }
+
     const key = `${ROOM_DATA_PREFIX}${room.id}`;
-    const data = JSON.stringify(room);
-    localStorage.setItem(key, data);
     
-    console.log("saveLocalRoom: Saved to localStorage:", key, {
+    // Save to IndexedDB
+    await set(key, roomToSave);
+    
+    console.log("saveLocalRoom: Saved to IndexedDB:", key, {
       title: room.title,
       updatedAt: room.updatedAt,
-      dataSize: data.length,
     });
     
-    // Also update index
+    // Also update index (synchronous, in localStorage)
     addRoomToIndex({
       id: room.id,
       title: room.title,
@@ -121,30 +174,33 @@ export function saveLocalRoom(room: LocalRoom): void {
     });
   } catch (error) {
     console.error("Error saving local room:", error);
-    // Check if it's a quota exceeded error
-    if (error instanceof DOMException && error.code === 22) {
-      console.error("localStorage quota exceeded!");
-    }
   }
 }
 
-export function deleteLocalRoom(roomId: string): void {
+export async function deleteLocalRoom(roomId: string): Promise<void> {
   if (typeof window === "undefined") return;
 
   try {
-    localStorage.removeItem(`${ROOM_DATA_PREFIX}${roomId}`);
+    const key = `${ROOM_DATA_PREFIX}${roomId}`;
+    
+    // Delete from IndexedDB
+    await del(key);
+    
+    // Also try to delete from localStorage (cleanup)
+    localStorage.removeItem(key);
+    
     removeRoomFromIndex(roomId);
   } catch (error) {
     console.error("Error deleting local room:", error);
   }
 }
 
-// Create a new room in localStorage (offline-first)
-export function createLocalRoom(
+// Create a new room in IndexedDB (offline-first)
+export async function createLocalRoom(
   title: string,
   description?: string,
   roomId?: string
-): LocalRoom {
+): Promise<LocalRoom> {
   const now = new Date().toISOString();
   const id = roomId || generateRoomId();
 
@@ -163,21 +219,21 @@ export function createLocalRoom(
     status: "local-only",
   };
 
-  saveLocalRoom(newRoom);
+  await saveLocalRoom(newRoom);
   return newRoom;
 }
 
 // Update room scene (for auto-save)
-export function updateLocalRoomScene(
+export async function updateLocalRoomScene(
   roomId: string,
   scene: ExcalidrawScene
-): void {
+): Promise<void> {
   if (typeof window === "undefined") {
     console.warn("updateLocalRoomScene: window is undefined");
     return;
   }
 
-  const room = loadLocalRoom(roomId);
+  const room = await loadLocalRoom(roomId);
   if (!room) {
     console.warn("updateLocalRoomScene: Room not found:", roomId);
     return;
@@ -197,15 +253,15 @@ export function updateLocalRoomScene(
     hasFiles: !!scene.files,
   });
 
-  saveLocalRoom(updatedRoom);
+  await saveLocalRoom(updatedRoom);
 }
 
 // Update room metadata (title, description)
-export function updateLocalRoomMetadata(
+export async function updateLocalRoomMetadata(
   roomId: string,
   updates: { title?: string; description?: string }
-): void {
-  const room = loadLocalRoom(roomId);
+): Promise<void> {
+  const room = await loadLocalRoom(roomId);
   if (!room) return;
 
   const updatedRoom: LocalRoom = {
@@ -215,12 +271,12 @@ export function updateLocalRoomMetadata(
     status: room.status === "synced" ? "local-only" : room.status,
   };
 
-  saveLocalRoom(updatedRoom);
+  await saveLocalRoom(updatedRoom);
 }
 
 // Mark room as synced (after successful sync)
-export function markRoomAsSynced(roomId: string, lastSyncedAt: string): void {
-  const room = loadLocalRoom(roomId);
+export async function markRoomAsSynced(roomId: string, lastSyncedAt: string): Promise<void> {
+  const room = await loadLocalRoom(roomId);
   if (!room) return;
 
   const updatedRoom: LocalRoom = {
@@ -229,7 +285,7 @@ export function markRoomAsSynced(roomId: string, lastSyncedAt: string): void {
     lastSyncedAt,
   };
 
-  saveLocalRoom(updatedRoom);
+  await saveLocalRoom(updatedRoom);
 }
 
 // ===== LEGACY API (for backward compatibility) =====
@@ -282,9 +338,9 @@ export function deleteRoom(roomId: string): void {
 }
 
 // Drawing data management (legacy)
-export function loadDrawingData(roomId: string): DrawingData | null {
+export async function loadDrawingData(roomId: string): Promise<DrawingData | null> {
   // Try new format first
-  const localRoom = loadLocalRoom(roomId);
+  const localRoom = await loadLocalRoom(roomId);
   if (localRoom) {
     return {
       elements: localRoom.scene.elements,
@@ -305,14 +361,14 @@ export function loadDrawingData(roomId: string): DrawingData | null {
   }
 }
 
-export function saveDrawingData(roomId: string, data: DrawingData): void {
+export async function saveDrawingData(roomId: string, data: DrawingData): Promise<void> {
   if (typeof window === "undefined") return;
 
   try {
     // Try to update existing local room
-    const existingRoom = loadLocalRoom(roomId);
+    const existingRoom = await loadLocalRoom(roomId);
     if (existingRoom) {
-      updateLocalRoomScene(roomId, {
+      await updateLocalRoomScene(roomId, {
         elements: data.elements,
         appState: data.appState,
         files: existingRoom.scene.files || {},
@@ -349,9 +405,9 @@ export function saveDrawingData(roomId: string, data: DrawingData): void {
   }
 }
 
-export function getLastSavedTime(roomId: string): string | null {
+export async function getLastSavedTime(roomId: string): Promise<string | null> {
   // Try new format first
-  const localRoom = loadLocalRoom(roomId);
+  const localRoom = await loadLocalRoom(roomId);
   if (localRoom && localRoom.updatedAt) {
     return new Date(localRoom.updatedAt).toLocaleString("th-TH", {
       year: "numeric",

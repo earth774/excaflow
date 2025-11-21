@@ -120,7 +120,7 @@ export default function Home() {
               : null,
             status: "synced",
           };
-          saveLocalRoom(localRoom);
+          await saveLocalRoom(localRoom);
         }
       }
 
@@ -172,7 +172,7 @@ export default function Home() {
           : null,
         status: "synced",
       };
-      saveLocalRoom(localRoom);
+      await saveLocalRoom(localRoom);
       
       // Update rooms list
       const updatedRooms = loadRoomsIndex();
@@ -194,7 +194,7 @@ export default function Home() {
 
     try {
       // Load room data from localStorage
-      const localRoom = loadLocalRoom(roomId);
+      const localRoom = await loadLocalRoom(roomId);
       if (!localRoom) {
         throw new Error("Room not found in localStorage");
       }
@@ -218,7 +218,7 @@ export default function Home() {
       const syncedRoom = await response.json();
 
       // Mark as synced in localStorage
-      markRoomAsSynced(
+      await markRoomAsSynced(
         roomId,
         syncedRoom.lastSyncedAt
           ? new Date(syncedRoom.lastSyncedAt).toISOString()
@@ -267,7 +267,7 @@ export default function Home() {
       }
 
       // Delete from localStorage
-      deleteLocalRoom(roomId);
+      await deleteLocalRoom(roomId);
       
       // Refresh rooms list
       const updatedRooms = loadRoomsIndex();
@@ -279,12 +279,12 @@ export default function Home() {
     }
   };
 
-  const handleEditRoom = (roomId: string) => {
+  const handleEditRoom = async (roomId: string) => {
     const room = rooms.find((r) => r.id === roomId);
     if (room) {
       const newTitle = prompt("แก้ไขชื่อห้อง:", room.title);
       if (newTitle && newTitle.trim()) {
-        updateLocalRoomMetadata(roomId, { title: newTitle.trim() });
+        await updateLocalRoomMetadata(roomId, { title: newTitle.trim() });
         const updatedRooms = loadRoomsIndex();
         setRooms(updatedRooms);
         setFilteredRooms(updatedRooms);

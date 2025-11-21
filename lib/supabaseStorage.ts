@@ -172,6 +172,50 @@ export async function deleteRoomFileFromStorage(
     }
   } catch (error) {
     console.error("Error in deleteRoomFileFromStorage:", error);
+  }
+}
+
+/**
+ * Delete all files in a room's folder from Supabase Storage
+ * @param roomId - The room ID
+ */
+export async function deleteRoomFolder(roomId: string): Promise<void> {
+  try {
+    console.log(`[supabaseStorage] Attempting to delete folder for room: ${roomId}`);
+    const supabase = getSupabaseAdminClient();
+
+    // 1. List all files in the folder
+    const { data: files, error: listError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .list(roomId);
+
+    if (listError) {
+      console.error("[supabaseStorage] Error listing files for deletion:", listError);
+      return;
+    }
+
+    if (!files || files.length === 0) {
+      console.log(`[supabaseStorage] No files found for room ${roomId}`);
+      return;
+    }
+
+    console.log(`[supabaseStorage] Found ${files.length} files to delete for room ${roomId}`);
+
+    // 2. Delete all files found
+    // The list returns file names relative to the folder, so we need to prepend the folder path
+    const filesToDelete = files.map((file) => `${roomId}/${file.name}`);
+    
+    const { error: deleteError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .remove(filesToDelete);
+
+    if (deleteError) {
+      console.error("[supabaseStorage] Error deleting files:", deleteError);
+    } else {
+      console.log(`[supabaseStorage] Successfully deleted ${files.length} files for room ${roomId}`);
+    }
+  } catch (error) {
+    console.error("[supabaseStorage] Error in deleteRoomFolder:", error);
     // Don't throw - deletion is best effort
   }
 }

@@ -17,6 +17,7 @@
     "@excalidraw/excalidraw": "^0.18.0",
     "@prisma/client": "^6.19.0",
     "@supabase/supabase-js": "^2.39.0",
+    "idb-keyval": "^6.2.2",
     "next": "16.0.3",
     "openai": "^6.9.1",
     "prisma": "^6.19.0",

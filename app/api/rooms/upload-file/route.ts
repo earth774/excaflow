@@ -76,8 +76,8 @@ export async function POST(request: NextRequest) {
       estimatedSizeMB: (estimatedSize / 1024 / 1024).toFixed(2),
     });
     
-    // Limit file size to 10MB (reasonable limit)
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    // Limit file size to 2MB
+    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
     if (estimatedSize > MAX_FILE_SIZE) {
       console.error("[upload-file] File too large:", {
         estimatedSize,
