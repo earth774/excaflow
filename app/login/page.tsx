@@ -43,7 +43,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     } catch (err) {
       setError("เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
