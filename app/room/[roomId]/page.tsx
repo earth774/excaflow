@@ -740,7 +740,7 @@ export default function RoomPage() {
                 console.warn(`[handleChange] File ${fileId} is too large: ${(estimatedSize / 1024 / 1024).toFixed(2)}MB`);
                 
                 // Alert user
-                alert(`ไฟล์ขนาดใหญ่เกินไป (${(estimatedSize / 1024 / 1024).toFixed(2)}MB) กรุณาอัปโหลดไฟล์ขนาดไม่เกิน 2MB`);
+                alert(`File too large (${(estimatedSize / 1024 / 1024).toFixed(2)}MB). Please upload files smaller than 2MB`);
                 
                 // Remove file and associated elements
                 if (excalidrawAPI) {
@@ -1103,7 +1103,7 @@ export default function RoomPage() {
         {/* Sidebar Header */}
         <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-3 overflow-hidden">
-            <Link href="/" className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500 dark:text-gray-400">
+            <Link href="/dashboard" className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500 dark:text-gray-400">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
@@ -1124,10 +1124,10 @@ export default function RoomPage() {
           
           {/* Room Info */}
           <div>
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">ข้อมูลห้อง</div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Room Info</div>
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">สถานะ</span>
+                <span className="text-gray-500 dark:text-gray-400">Status</span>
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                   syncStatus.status === "synced" && syncStatus.isInSync !== false
                     ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
@@ -1137,14 +1137,14 @@ export default function RoomPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">อัปเดตล่าสุด</span>
+                <span className="text-gray-500 dark:text-gray-400">Last Updated</span>
                 <span className="text-gray-700 dark:text-gray-300 text-xs">
                   {new Date(localRoom.updatedAt).toLocaleTimeString("th-TH", { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
               {!isOwner && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-xs p-2 rounded-lg">
-                  คุณอยู่ในโหมดอ่านอย่างเดียว
+                  You are in read-only mode
                 </div>
               )}
             </div>
@@ -1152,26 +1152,26 @@ export default function RoomPage() {
 
           {/* Share */}
           <div>
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">แบ่งปัน</div>
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Share</div>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href)
-                  .then(() => alert("คัดลอกลิงก์เรียบร้อยแล้ว"))
-                  .catch(() => alert("ไม่สามารถคัดลอกลิงก์ได้"));
+                  .then(() => alert("Link copied to clipboard"))
+                  .catch(() => alert("Failed to copy link"));
               }}
               className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
             >
               <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
-              <span>คัดลอกลิงก์</span>
+              <span>Copy Link</span>
             </button>
           </div>
 
           {/* Actions */}
           {isOwner && (
             <div>
-              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">การจัดการ</div>
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Actions</div>
               <div className="space-y-2">
                 <button
                   onClick={handlePush}
@@ -1179,7 +1179,7 @@ export default function RoomPage() {
                   className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
                 >
                   <div className={`w-2 h-2 rounded-full ${isSyncing ? "bg-gray-400 animate-pulse" : "bg-blue-500"}`} />
-                  <span>{isSyncing ? "กำลังบันทึก..." : "บันทึกข้อมูล (Push)"}</span>
+                  <span>{isSyncing ? "Saving..." : "Save to Server (Push)"}</span>
                 </button>
                 
                 <button
@@ -1190,7 +1190,7 @@ export default function RoomPage() {
                   <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  <span>ตรวจสอบสถานะ Sync</span>
+                  <span>Check Sync Status</span>
                 </button>
 
                 {syncStatus.dbExists && (
@@ -1202,7 +1202,7 @@ export default function RoomPage() {
                     <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
                     </svg>
-                    <span>ดึงข้อมูลจาก Server</span>
+                    <span>Pull from Server</span>
                   </button>
                 )}
               </div>
@@ -1212,12 +1212,12 @@ export default function RoomPage() {
           {/* File Upload Status */}
           {isOwner && (uploadingFiles.size > 0 || uploadErrors.size > 0) && (
             <div>
-              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">การอัปโหลด</div>
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Uploads</div>
               <div className="space-y-2">
                 {uploadingFiles.size > 0 && (
                   <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2">
                     <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    กำลังอัปโหลด {uploadingFiles.size} ไฟล์...
+                    Uploading {uploadingFiles.size} file{uploadingFiles.size > 1 ? 's' : ''}...
                   </div>
                 )}
                 {Array.from(uploadErrors.entries()).map(([fileId, error]) => (
@@ -1295,12 +1295,12 @@ export default function RoomPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                พบข้อมูลไม่ตรงกัน
+                Conflict Detected
               </h3>
             </div>
             
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-              ข้อมูลในเครื่องของคุณไม่ตรงกับข้อมูลบน Server คุณต้องการใช้ข้อมูลชุดไหน?
+              Your local data doesn't match the server data. Which version would you like to use?
             </p>
 
             <div className="space-y-3">
@@ -1310,9 +1310,9 @@ export default function RoomPage() {
                 className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl transition-all group"
               >
                 <div className="text-left">
-                  <div className="font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">ใช้ข้อมูลในเครื่องนี้</div>
+                  <div className="font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Use Local Data</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    อัปเดตเมื่อ: {new Date(conflictInfo.localUpdatedAt).toLocaleString("th-TH")}
+                    Updated: {new Date(conflictInfo.localUpdatedAt).toLocaleString("en-US")}
                   </div>
                 </div>
                 <div className="w-4 h-4 rounded-full border-2 border-gray-300 group-hover:border-blue-500" />
@@ -1324,9 +1324,9 @@ export default function RoomPage() {
                 className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl transition-all group"
               >
                 <div className="text-left">
-                  <div className="font-semibold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">ใช้ข้อมูลจาก Server</div>
+                  <div className="font-semibold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">Use Server Data</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    อัปเดตเมื่อ: {new Date(conflictInfo.serverUpdatedAt).toLocaleString("th-TH")}
+                    Updated: {new Date(conflictInfo.serverUpdatedAt).toLocaleString("en-US")}
                   </div>
                 </div>
                 <div className="w-4 h-4 rounded-full border-2 border-gray-300 group-hover:border-green-500" />
@@ -1340,7 +1340,7 @@ export default function RoomPage() {
               }}
               className="w-full mt-6 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
             >
-              ยกเลิกและตัดสินใจภายหลัง
+              Cancel and Decide Later
             </button>
           </div>
         </div>
@@ -1370,12 +1370,12 @@ export default function RoomPage() {
 
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                อธิบายไดอะแกรมที่คุณต้องการ
+                Describe the diagram you want
               </label>
               <textarea
                 value={aiPrompt}
                 onChange={(e) => setAIPrompt(e.target.value)}
-                placeholder="เช่น: สร้าง flowchart สำหรับระบบ Login มี 3 ขั้นตอน Start, Login Form, Success..."
+                placeholder="e.g., Create a flowchart for Login system with 3 steps: Start, Login Form, Success..."
                 className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 dark:text-white text-sm transition-all resize-none"
                 rows={4}
                 disabled={isGenerating}
@@ -1400,14 +1400,14 @@ export default function RoomPage() {
                 {isGenerating ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>กำลังสร้าง...</span>
+                    <span>Generating...</span>
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    <span>สร้างไดอะแกรม</span>
+                    <span>Generate Diagram</span>
                   </>
                 )}
               </button>
