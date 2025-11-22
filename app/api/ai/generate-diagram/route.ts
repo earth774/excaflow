@@ -1,103 +1,145 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai, getModelName, isOpenAIConfigured } from "@/lib/openai";
 
-// System prompt for Excalidraw elements structure
-const EXCALIDRAW_SYSTEM_PROMPT = `You are an expert system architect and UI designer specialized in creating Excalidraw diagrams.
-Your goal is to generate clear, logical, and visually organized flowcharts based on user descriptions.
-
-### CORE METHODOLOGY: GRID-BASED LAYOUT
-Do NOT think in pixels. Think in a VIRTUAL GRID where:
-- Each "cell" is 200x150 units (Width x Height).
-- Grid coordinates (row, col) map to pixels:
-  - x = col * 240 + 100 (Horizontal spacing - Compact)
-  - y = row * 160 + 100 (Vertical spacing - Compact)
-- Standard Shape Size: width=160, height=80.
-
-### PROCESS (CHAIN OF THOUGHT)
-1. **ANALYZE**: Identify the key steps, decisions, and flow from the user's prompt.
-2. **PLAN**: Assign each step to a logical (row, col) coordinate.
-   - Start at (0, 0) or (0, 1).
-   - Flow downwards (row + 1) for sequence.
-   - Flow sideways (col - 1, col + 1) for branches/alternatives.
-   - Ensure "Yes" and "No" paths from decisions are visually distinct.
-3. **GENERATE**: Convert the plan into the JSON format below.
-
-### SHAPE RULES
-- **Process/Step**: Use "rectangle".
-- **Decision/Condition**: Use "diamond".
-- **Start/End**: Use "ellipse".
-- **Database/Storage**: Use "cylinder" (if available) or "rectangle" with specific styling.
-- **Connections**: Use "arrow" to connect shapes.
-  - **CRITICAL**: Arrows MUST use "binding" to attach to shapes.
-  - **CRITICAL**: Arrow points are RELATIVE to the start position.
-- **Text**:
-  - Text MUST be a separate element.
-  - Text MUST be perfectly centered inside its container shape.
-  - Font size: 20px (Small), 28px (Medium/Standard).
-
-### JSON OUTPUT FORMAT
-Return a SINGLE JSON object with an "elements" array.
-Each element must follow this structure:
-
-\`\`\`json
-{
-  "type": "rectangle" | "diamond" | "ellipse" | "arrow" | "text",
-  "id": "unique_id",
-  "x": number, // Calculated from grid
-  "y": number, // Calculated from grid
-  "width": number,
-  "height": number,
-  "strokeColor": "#1e1e1e",
-  "backgroundColor": "transparent",
-  "fillStyle": "hachure",
-  "strokeWidth": 1,
-  "strokeStyle": "solid",
-  "roundness": { "type": 3 },
-  "text": "Label Content", // For text elements ONLY
+// Helper function to clean and validate Mermaid syntax
+function cleanAndValidateMermaidSyntax(syntax: string): string {
+  let cleaned = syntax.trim();
   
-  // ARROW SPECIFIC PROPERTIES (CRITICAL)
-  "startBinding": { "elementId": "source_id", "focus": 0.5, "gap": 1 },
-  "endBinding": { "elementId": "target_id", "focus": 0.5, "gap": 1 },
-  "points": [[0, 0], [dx, dy]] // Relative points! [0,0] is the start, [dx,dy] is the end relative to start
+  // Remove any markdown code blocks if present
+  cleaned = cleaned.replace(/^```mermaid\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/g, '');
+  
+  // Split into lines for processing
+  const lines = cleaned.split('\n');
+  const cleanedLines: string[] = [];
+  
+  // Track node ID mappings for fixing invalid IDs
+  const nodeIdMap = new Map<string, string>();
+  
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].trim();
+    
+    // Skip empty lines
+    if (!line) {
+      cleanedLines.push('');
+      continue;
+    }
+    
+    // Skip comment lines
+    if (line.startsWith('%%')) {
+      continue;
+    }
+    
+    // Fix node definitions that start with numbers or have invalid characters
+    // Pattern: nodeId[ or nodeId{ or nodeId(
+    // Node IDs must start with a letter or underscore, not a number
+    line = line.replace(/(\b)(\d+)([A-Za-z_]\w*)\s*([\[\(\{])/g, (match, before, num, rest, bracket) => {
+      // If node ID starts with number, prefix it with a letter
+      const newId = `N${num}${rest}`;
+      nodeIdMap.set(`${num}${rest}`, newId);
+      return `${before}${newId}${bracket}`;
+    });
+    
+    // Fix node IDs that are just numbers
+    line = line.replace(/\b(\d+)\s*([\[\(\{])/g, (match, num, bracket) => {
+      const newId = `N${num}`;
+      nodeIdMap.set(num, newId);
+      return `${newId}${bracket}`;
+    });
+    
+    // Fix node references in arrows (replace old IDs with new ones)
+    nodeIdMap.forEach((newId, oldId) => {
+      // Replace in arrow definitions: oldId --> or --> oldId
+      const arrowPattern = new RegExp(`(^|\\s|-->|--|-)${oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|-->|--|-|$)`, 'g');
+      line = line.replace(arrowPattern, `$1${newId}$2`);
+    });
+    
+    // Remove any invalid characters that might cause parse errors
+    // Keep only valid Mermaid syntax characters
+    // But be careful not to break valid syntax
+    
+    // Fix malformed node definitions with dashes, numbers, or special chars
+    // Pattern: Start[------------------- or Start[123 or Start[ "text" should become Start["Label"]
+    // First, handle cases where bracket content is malformed (dashes, numbers alone, etc.)
+    line = line.replace(/(\w+)\[([^\]]*?)(?=\]|$)/g, (match, nodeId, content) => {
+      // Skip if already properly formatted with quotes
+      if (content.includes('"') && content.match(/^["'].*["']$/)) {
+        return match;
+      }
+      
+      // If content is just dashes, numbers, or whitespace, use nodeId as label
+      const trimmedContent = content.trim();
+      if (!trimmedContent || 
+          trimmedContent.match(/^-+$/) || 
+          trimmedContent.match(/^\d+$/) ||
+          trimmedContent.match(/^[-_\s]+$/)) {
+        return `${nodeId}["${nodeId}"]`;
+      }
+      
+      // If content doesn't have quotes but has text, add quotes
+      if (!content.includes('"') && trimmedContent.length > 0) {
+        // Remove any trailing dashes or numbers that might be artifacts
+        const cleanContent = trimmedContent.replace(/[-_\s]+$/, '').replace(/^\d+/, '');
+        if (cleanContent.length > 0) {
+          return `${nodeId}["${cleanContent}"]`;
+        } else {
+          return `${nodeId}["${nodeId}"]`;
+        }
+      }
+      
+      return match;
+    });
+    
+    // Fix unclosed brackets (node definitions that don't end with ])
+    line = line.replace(/(\w+)\[([^\]]*)$/, (match, nodeId, content) => {
+      // Only fix if the line doesn't already have a closing bracket somewhere
+      if (!line.includes(']') && content && content.trim().length > 0) {
+        const cleanContent = content.trim().replace(/[-_\s]+$/, '');
+        if (cleanContent.length > 0 && !cleanContent.match(/^-+$/)) {
+          return `${nodeId}["${cleanContent}"]`;
+        } else {
+          return `${nodeId}["${nodeId}"]`;
+        }
+      }
+      return match;
+    });
+    
+    // Remove any lines with only dashes or invalid patterns
+    if (line.match(/^-+$/) || line.match(/^\s*[0-9\s-]+\s*$/)) {
+      continue;
+    }
+    
+    cleanedLines.push(line);
+  }
+  
+  cleaned = cleanedLines.join('\n').trim();
+  
+  // Final validation: ensure we have a valid diagram type declaration
+  if (!cleaned.match(/^(flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph)\s+/i)) {
+    // If missing, try to prepend flowchart TD
+    if (cleaned.length > 0 && !cleaned.startsWith('flowchart') && !cleaned.startsWith('sequence')) {
+      cleaned = `flowchart TD\n${cleaned}`;
+    }
+  }
+  
+  return cleaned;
 }
-\`\`\`
-
-### CRITICAL RULES FOR ARROWS
-1. **Start Position**: Set arrow.x and arrow.y to the **exact center** of the source shape.
-   - arrow.x = source.x + source.width/2
-   - arrow.y = source.y + source.height/2
-2. **End Position**: Calculate the difference (dx, dy) to the **exact center** of the target shape.
-   - dx = (target.x + target.width/2) - arrow.x
-   - dy = (target.y + target.height/2) - arrow.y
-3. **Points**: ALWAYS use \`[[0, 0], [dx, dy]]\`.
-4. **Binding**: ALWAYS include \`startBinding\` (source ID) and \`endBinding\` (target ID).
-
-### CRITICAL RULES FOR TEXT
-- Text elements are INDEPENDENT. They are NOT properties of the shape.
-- To center text in a shape at (shapeX, shapeY) with size (W, H):
-  - Estimate text width (approx 10px per char).
-  - textX = shapeX + (W/2) - (textWidth/2)
-  - textY = shapeY + (H/2) - (fontSize/2)
-  - textAlign: "center", verticalAlign: "middle"
-
-### EXAMPLE: "Login Flow"
-1. Start (0, 1) -> "ellipse" id="start"
-2. Input (1, 1) -> "rectangle" id="input"
-   - Arrow from "start" to "input":
-     - x = start.center.x, y = start.center.y
-     - dx = input.center.x - start.center.x, dy = input.center.y - start.center.y
-     - points = [[0, 0], [dx, dy]]
-     - startBinding: { elementId: "start" }, endBinding: { elementId: "input" }
-
-Generate the JSON for the user's request. Focus on LOGICAL FLOW, ALIGNMENT, and CONNECTIVITY.`;
 
 // System prompt for Mermaid syntax
+// Note: We use Mermaid syntax and convert to Excalidraw on the client side
+// The EXCALIDRAW_SYSTEM_PROMPT is not used anymore as we use the Mermaid -> Excalidraw pipeline
 const MERMAID_SYSTEM_PROMPT = `You are an expert system architect specialized in creating Mermaid diagrams.
 Your goal is to generate clear, logical, and well-structured diagrams using Mermaid syntax based on user descriptions.
 
+### CRITICAL REQUIREMENT: EVERY NODE MUST HAVE A LABEL
+**MANDATORY**: Every single node in your diagram MUST have a descriptive label that clearly explains what it represents.
+- Labels should be derived directly from the user's description
+- Labels must be meaningful and descriptive (e.g., "Start Login", "Validate Email", "Check Password", "Success", "Error")
+- NEVER leave a node without a label or use empty labels
+- Labels should be in the same language as the user's prompt (Thai or English)
+
 ### MERMAID DIAGRAM TYPES
 Choose the most appropriate diagram type based on the user's request:
-- **Flowchart**: For processes, workflows, and decision trees
+- **Flowchart**: For processes, workflows, and decision trees (MOST COMMON - Use this for most cases)
 - **Sequence Diagram**: For interactions between entities over time
 - **Class Diagram**: For object-oriented structures and relationships
 - **State Diagram**: For state machines and transitions
@@ -106,74 +148,64 @@ Choose the most appropriate diagram type based on the user's request:
 - **Pie Chart**: For data distribution
 - **Git Graph**: For version control branching
 
-### FLOWCHART SYNTAX (Most Common)
+### FLOWCHART SYNTAX (Most Common - RECOMMENDED)
+**ALWAYS use flowchart TD for most diagrams. Keep it simple and compatible with @excalidraw/mermaid-to-excalidraw.**
+
 \`\`\`mermaid
 flowchart TD
-    A[Start] --> B{Is it working?}
-    B -->|Yes| C[Great]
-    B -->|No| D[Debug]
-    D --> E[Test Again]
+    A["Start"] --> B{"Is it working?"}
+    B -->|Yes| C["Great"]
+    B -->|No| D["Debug"]
+    D --> E["Test Again"]
     E --> B
-    C --> F[End]
+    C --> F["End"]
 \`\`\`
 
-**Node Shapes**:
-- \`[Text]\` - Rectangle (for processes)
-- \`{Text}\` - Diamond (for decisions)
-- \`([Text])\` - Stadium/Pill shape (for start/end)
-- \`[(Text)]\` - Cylinder (for databases)
-- \`((Text))\` - Circle
-- \`[\\Text/]\` - Trapezoid
+**Node Shapes** (Use ONLY these simple shapes for compatibility):
+- \`id["Label Text"]\` - Rectangle (for processes/steps) - **MOST COMMON**
+- \`id{"Label Text"}\` - Diamond (for decisions/conditions)
+- \`id(["Label Text"])\` - Stadium/Pill shape (for start/end)
+- **AVOID**: Complex shapes like cylinders, circles, trapezoids that may not convert well
 
 **Flow Directions**:
-- TD (Top Down), TB (Top to Bottom)
-- BT (Bottom to Top)
-- LR (Left to Right)
-- RL (Right to Left)
+- TD (Top Down) - **RECOMMENDED** - Use this for most flowcharts
+- TB (Top to Bottom) - Same as TD
+- LR (Left to Right) - Only if explicitly requested
+- BT (Bottom to Top) - Rarely used
+- RL (Right to Left) - Rarely used
 
 **Connections**:
-- \`-->\` - Arrow
-- \`---\` - Line
-- \`-.->\` - Dotted arrow
-- \`==>\` - Thick arrow
-- \`-->|Text|\` - Arrow with label
+- \`-->\` - Arrow (use this for most connections)
+- \`-->|Label|\` - Arrow with label (for decision branches like Yes/No)
+- **AVOID**: Dotted arrows, thick arrows, or other complex connection types
 
-### SEQUENCE DIAGRAM SYNTAX
-\`\`\`mermaid
-sequenceDiagram
-    participant A as User
-    participant B as Server
-    A->>B: Request
-    B-->>A: Response
-\`\`\`
-
-### CLASS DIAGRAM SYNTAX
-\`\`\`mermaid
-classDiagram
-    class Animal {
-        +name: string
-        +age: int
-        +makeSound()
-    }
-    Animal <|-- Dog
-\`\`\`
+**IMPORTANT**: Keep your Mermaid syntax simple. Avoid:
+- ❌ Subgraphs (not well supported)
+- ❌ Style definitions (not needed)
+- ❌ Click handlers (not needed)
+- ❌ Complex styling (keep it basic)
 
 ### OUTPUT FORMAT
 Return a JSON object with:
 \`\`\`json
 {
-  "mermaid": "flowchart TD\\n    A[Start] --> B[End]",
+  "mermaid": "flowchart TD\\n    A[\"Start\"] --> B[\"End\"]",
   "type": "flowchart"
 }
 \`\`\`
 
 ### CRITICAL RULES FOR TEXT LABELS:
-1. **USE DOUBLE QUOTES** for all labels - e.g., \`id["Label Text"]\`
-2. **Newlines ARE allowed** inside quotes - use \`\\n\` for line breaks
-3. **Escape quotes** inside labels if needed - e.g., \`"Say \\"Hello\\""\`
-4. **Use simple IDs** - Like A, B, C or start, login, success
-5. **Proper indentation** - 4 spaces per level
-6. **Use \\n for newlines** in JSON response (between nodes)
+1. **EVERY NODE MUST HAVE A LABEL** - This is mandatory. No exceptions.
+2. **USE DOUBLE QUOTES** for all labels - e.g., \`id["Label Text"]\` or \`id{"Decision Label"}\`
+3. **Labels must be descriptive** - Extract meaningful labels from the user's description
+4. **Newlines ARE allowed** inside quotes - use \`\\n\` for line breaks if needed
+5. **Use simple IDs** - Like A, B, C or start, login, success, validate, error
+   - **CRITICAL**: Node IDs MUST start with a LETTER or underscore, NOT a number
+   - ❌ BAD: \`1Start\`, \`123\`, \`2Login\` (IDs starting with numbers are INVALID)
+   - ✅ GOOD: \`Start\`, \`A\`, \`login\`, \`step1\` (IDs starting with letters are VALID)
+6. **Proper indentation** - 4 spaces per level
+7. **Use \\n for newlines** in JSON response (between nodes)
+8. **NEVER use dashes or numbers alone as node content** - Always use proper label text in quotes
 
 ### RESERVED KEYWORDS - DO NOT USE AS NODE IDs:
 **CRITICAL:** These words are reserved in Mermaid and CANNOT be used as node IDs:
@@ -182,29 +214,37 @@ Return a JSON object with:
 - ❌ \`direction\`, \`flowchart\`
 
 ### EXAMPLE - Good vs Bad:
-❌ BAD: \`start(Start Process)\` (no quotes, might break with special chars)
-✅ GOOD: \`start["Start Process"]\`
+❌ BAD: \`start[Start]\` (no quotes, might break with special chars)
+✅ GOOD: \`start["Start Login Process"]\`
 
-❌ BAD: \`login[Login\nPage]\` (newlines without quotes might fail)
-✅ GOOD: \`login["Login\nPage"]\`
+❌ BAD: \`login[Login]\` (too short, not descriptive)
+✅ GOOD: \`login["Enter Email and Password"]\`
+
+❌ BAD: \`check{}\` (empty label - FORBIDDEN)
+✅ GOOD: \`check{"Is Password Valid?"}\`
 
 ❌ BAD: \`end["End"]\` (reserved keyword ID)
-✅ GOOD: \`finish["End"]\`
+✅ GOOD: \`finish["Process Complete"]\`
 
 ### COMPLEX EXAMPLE (Follow this style):
 \`\`\`mermaid
 flowchart TD
-    Start["Start Flow"] --> Input["Receive Data\n(Name, ID, Date)"]
-    Input --> Check{"Check Data\nIs it valid?"}
-    Check -->|No| Error["Show Error\nInvalid Input"]
-    Error --> End["End Process"]
-    Check -->|Yes| Process["Process Data\nSave to DB"]
-    Process --> Success["Success"]
-    Success --> End
+    Start["Start Login Flow"] --> Input["Enter Email and Password"]
+    Input --> Validate{"Is Email Valid?"}
+    Validate -->|No| Error["Show Error Message"]
+    Error --> Input
+    Validate -->|Yes| Check{"Is Password Correct?"}
+    Check -->|No| Error
+    Check -->|Yes| Success["Login Successful"]
+    Success --> Finish["End Process"]
 \`\`\`
 
-Generate clean, professional Mermaid syntax.
-REMEMBER: Always wrap label text in double quotes \`["Like This"]\`.`;
+**REMEMBER**:
+1. Every node MUST have a descriptive label in double quotes
+2. Use simple flowchart TD syntax
+3. Extract labels directly from the user's description
+4. Keep it simple and compatible with conversion tools
+5. Always wrap label text in double quotes: \`["Like This"]\` or \`{"Like This"}\``;
 
 export async function POST(request: NextRequest) {
   try {
@@ -277,7 +317,14 @@ export async function POST(request: NextRequest) {
         ];
 
     // Build API call parameters
-    const apiParams: any = {
+    interface ApiParams {
+      model: string;
+      messages: Array<{ role: "user" | "system"; content: string }>;
+      max_completion_tokens: number;
+      response_format?: { type: "json_object" };
+    }
+    
+    const apiParams: ApiParams = {
       model: modelName,
       messages,
       // Reasoning models need 10-20x more tokens (they use tokens for thinking)
@@ -325,24 +372,203 @@ export async function POST(request: NextRequest) {
     let diagramType: string;
     
     try {
-      const parsed = JSON.parse(responseContent);
+      // Try to clean up the response content first
+      let cleanedContent = responseContent.trim();
       
-      if (!parsed || typeof parsed !== "object" || !("mermaid" in parsed)) {
+      // Remove markdown code blocks if present
+      cleanedContent = cleanedContent.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/g, '');
+      
+      // Try to parse as JSON
+      let parsed: { mermaid?: string; type?: string } | null = null;
+      try {
+        parsed = JSON.parse(cleanedContent);
+      } catch (jsonError) {
+        // If JSON parsing fails, try to extract mermaid syntax directly using regex
+        console.warn("JSON parse failed, attempting to extract mermaid syntax from response...");
+        console.warn("JSON error:", jsonError instanceof Error ? jsonError.message : String(jsonError));
+        console.warn("Response content (first 1000 chars):", cleanedContent.substring(0, 1000));
+        
+        // Strategy 1: Try to find mermaid syntax in the response with more flexible regex
+        // Handle cases where the JSON string might be broken or unescaped
+        const mermaidMatch = cleanedContent.match(/"mermaid"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
+        
+        // Strategy 2: If that fails, try to find the mermaid field even if quotes are broken
+        if (!mermaidMatch) {
+          // Look for "mermaid": followed by content until we find a pattern that looks like mermaid syntax
+          const mermaidFieldMatch = cleanedContent.match(/"mermaid"\s*:\s*"([^"]*)/);
+          if (mermaidFieldMatch) {
+            // Try to extract everything after the opening quote until we find a closing pattern
+            const startIndex = cleanedContent.indexOf('"mermaid"');
+            if (startIndex >= 0) {
+              const afterMermaid = cleanedContent.substring(startIndex);
+              // Look for flowchart/sequence/etc. patterns
+              const syntaxMatch = afterMermaid.match(/(flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph)[\s\S]*?(?=\s*"|,|\n\s*"type"|$)/);
+              if (syntaxMatch) {
+                const extractedMermaid = syntaxMatch[0].replace(/^[^"]*"/, '').replace(/\\n/g, '\n').trim();
+                const extractedType = syntaxMatch[1] || "flowchart";
+                parsed = { mermaid: extractedMermaid, type: extractedType };
+              }
+            }
+          }
+        }
+        
+        // Strategy 3: If still no match, try to find flowchart/sequence/etc. directly in the content
+        if (!parsed || !parsed.mermaid) {
+          const diagramTypeMatch = cleanedContent.match(/(flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph)/i);
+          if (diagramTypeMatch) {
+            const type = diagramTypeMatch[1].toLowerCase();
+            // Try to extract the full diagram syntax
+            const diagramStart = cleanedContent.indexOf(diagramTypeMatch[0]);
+            if (diagramStart >= 0) {
+              const afterStart = cleanedContent.substring(diagramStart);
+              // Extract until we hit certain boundaries (closing brace, end of string, etc.)
+              const endMatch = afterStart.match(/(flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph)[\s\S]*?(?=\s*"|,|\n\s*"type"|$)/);
+              if (endMatch) {
+                const extractedMermaid = endMatch[0].replace(/^[^"]*"/, '').replace(/\\n/g, '\n').trim();
+                parsed = { mermaid: extractedMermaid, type: type };
+              }
+            }
+          }
+        }
+        
+        // Strategy 4: Last resort - if we still have the original match, use it
+        if (mermaidMatch && mermaidMatch[1] && (!parsed || !parsed.mermaid)) {
+          const extractedMermaid = mermaidMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          const extractedType = cleanedContent.match(/"type"\s*:\s*"([^"]+)"/)?.[1] || "flowchart";
+          parsed = { mermaid: extractedMermaid, type: extractedType };
+        }
+        
+        // Strategy 5: Last resort - try to extract any mermaid-like syntax from the entire response
+        if (!parsed || !parsed.mermaid) {
+          // Look for any line that starts with flowchart, sequenceDiagram, etc.
+          const allLines = cleanedContent.split('\n');
+          for (const line of allLines) {
+            const diagramMatch = line.match(/^\s*(flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph)\s+([A-Z]{2})/i);
+            if (diagramMatch) {
+              // Found a diagram start, try to extract the whole diagram
+              const lineIndex = allLines.indexOf(line);
+              const remainingLines = allLines.slice(lineIndex);
+              // Try to find where the diagram ends (look for closing patterns or end of meaningful content)
+              const diagramLines: string[] = [];
+              for (let i = 0; i < remainingLines.length; i++) {
+                const currentLine = remainingLines[i];
+                diagramLines.push(currentLine);
+                // Stop if we hit certain patterns that suggest end of diagram
+                if (currentLine.match(/^\s*[}\]]\s*$/) || 
+                    currentLine.match(/^\s*"type"/) ||
+                    (i > 10 && currentLine.trim().length === 0)) {
+                  break;
+                }
+              }
+              const extractedMermaid = diagramLines.join('\n').trim();
+              if (extractedMermaid.length > 20) { // Make sure we got something substantial
+                parsed = { mermaid: extractedMermaid, type: diagramMatch[1].toLowerCase() };
+                break;
+              }
+            }
+          }
+        }
+        
+        // If we still don't have a valid parsed object, throw error
+        if (!parsed || !parsed.mermaid || typeof parsed.mermaid !== "string") {
+          throw new Error(`Failed to parse JSON and could not extract mermaid syntax. JSON error: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}. Response preview: ${cleanedContent.substring(0, 500)}`);
+        }
+      }
+      
+      if (!parsed || typeof parsed !== "object") {
+        throw new Error("Response does not contain valid object");
+      }
+
+      if (!parsed.mermaid || typeof parsed.mermaid !== "string") {
         throw new Error("Response does not contain mermaid syntax");
       }
 
       mermaidSyntax = parsed.mermaid;
       diagramType = parsed.type || "flowchart";
       
+      // Clean up mermaid syntax (remove extra whitespace, fix line breaks)
+      mermaidSyntax = mermaidSyntax.replace(/\\n/g, '\n').trim();
+      
+      // Validate and clean Mermaid syntax to fix common issues
+      mermaidSyntax = cleanAndValidateMermaidSyntax(mermaidSyntax);
+      
       console.log("Mermaid syntax generated:", mermaidSyntax.substring(0, 200) + "...");
+      
+      // Validate Mermaid syntax has nodes with labels
+      if (!mermaidSyntax || mermaidSyntax.trim().length === 0) {
+        throw new Error("Mermaid syntax is empty");
+      }
+      
+      // Check for node definitions with labels
+      // Look for patterns like: id["label"], id{"label"}, id(["label"])
+      const nodePattern = /(\w+)\s*(?:\[|\["|\(|\(\["|\{)([^\]\)\}]*?)(?:\]|"\]|\)|"\)\]|\})/g;
+      const lines = mermaidSyntax.split('\n');
+      const nodeDefinitions: Array<{ id: string; label: string }> = [];
+      
+      lines.forEach((line) => {
+        const matches = Array.from(line.matchAll(nodePattern));
+        matches.forEach((match) => {
+          if (match[1] && match[2]) {
+            const label = match[2].replace(/^"|"$/g, '').trim();
+            if (label.length > 0) {
+              nodeDefinitions.push({ id: match[1], label });
+            }
+          }
+        });
+      });
+      
+      // Validate that we found at least some nodes with labels
+      if (nodeDefinitions.length === 0) {
+        console.warn("No node definitions with labels found in Mermaid syntax");
+        console.warn("Mermaid syntax:", mermaidSyntax);
+        // Don't fail completely, but mark it as potentially problematic
+      }
+      
+      // Check for empty labels (nodes without proper labels)
+      const emptyLabelPattern = /(\w+)\s*(?:\[\s*\]|\{\s*\}|\(\s*\))/g;
+      const emptyMatches = Array.from(mermaidSyntax.matchAll(emptyLabelPattern));
+      if (emptyMatches.length > 0) {
+        console.warn(`Found ${emptyMatches.length} nodes with empty labels`);
+      }
+      
     } catch (parseError) {
       console.error("Error parsing Mermaid response:", parseError);
-      console.error("Response content:", responseContent);
+      console.error("Response content (full):", responseContent);
+      const errorMessage = parseError instanceof Error 
+        ? parseError.message 
+        : String(parseError);
       return NextResponse.json(
-        { error: "Invalid Mermaid response from AI", details: String(parseError) },
+        { 
+          error: "Invalid Mermaid response from AI", 
+          details: errorMessage,
+          message: "AI สร้างไดอะแกรมไม่สำเร็จ กรุณาลองอีกครั้งหรือปรับ prompt ให้ชัดเจนขึ้น",
+          debug: {
+            responseLength: responseContent.length,
+            responsePreview: responseContent.substring(0, 500)
+          }
+        },
         { status: 500 }
       );
     }
+
+    // Extract node labels for client-side fallback
+    const nodePattern = /(\w+)\s*(?:\[|\["|\(|\(\["|\{)([^\]\)\}]*?)(?:\]|"\]|\)|"\)\]|\})/g;
+    const lines = mermaidSyntax.split('\n');
+    const nodeLabels: Record<string, string> = {};
+    
+    lines.forEach((line) => {
+      const matches = Array.from(line.matchAll(nodePattern));
+      matches.forEach((match) => {
+        if (match[1] && match[2]) {
+          const label = match[2].replace(/^"|"$/g, '').replace(/\\n/g, '\n').trim();
+          if (label.length > 0) {
+            nodeLabels[match[1]] = label;
+          }
+        }
+      });
+    });
+    
+    const hasLabels = Object.keys(nodeLabels).length > 0;
 
     // If user requested Mermaid format, return it directly
     if (format === "mermaid") {
@@ -350,6 +576,9 @@ export async function POST(request: NextRequest) {
         mermaid: mermaidSyntax,
         type: diagramType,
         format: "mermaid",
+        hasLabels,
+        nodeLabels,
+        rawPrompt: sanitizedPrompt,
         success: true,
       });
     }
@@ -361,6 +590,9 @@ export async function POST(request: NextRequest) {
       type: diagramType,
       format: "excalidraw",
       convertOnClient: true, // Signal to client to convert
+      hasLabels,
+      nodeLabels, // Provide parsed labels for client-side fallback
+      rawPrompt: sanitizedPrompt,
       success: true,
     });
   } catch (error: unknown) {

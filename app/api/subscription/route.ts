@@ -18,10 +18,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ isPro: false });
     }
 
+    // User is Pro only if they have a Stripe price ID and their subscription period hasn't expired yet
     const isPro = 
       dbUser.stripePriceId && 
       dbUser.stripeCurrentPeriodEnd && 
-      dbUser.stripeCurrentPeriodEnd.getTime() + 86_400_000 > Date.now();
+      dbUser.stripeCurrentPeriodEnd.getTime() > Date.now();
 
     return NextResponse.json({
       isPro: !!isPro,

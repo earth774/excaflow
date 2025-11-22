@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { supabase } from "@/lib/supabaseClient";
+import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
 
 export default function LandingPage() {
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
@@ -349,7 +350,7 @@ export default function LandingPage() {
               </ul>
 
               <button
-                onClick={() => handleCheckout("price_1SW5QdAbVL76kMms9YZzqK03")} // Replace with your actual Stripe Price ID
+                onClick={() => handleCheckout(STRIPE_PRICE_ID)}
                 disabled={loading}
                 className="block w-full py-3.5 px-6 text-center bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white font-semibold rounded-xl transition-all transform hover:-translate-y-0.5 shadow-lg shadow-violet-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >

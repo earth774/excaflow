@@ -1054,8 +1054,37 @@ export default function RoomPage() {
       if (data.convertOnClient && data.mermaid) {
         console.log("Converting Mermaid to Excalidraw on client...");
         console.log("Mermaid syntax to convert:", data.mermaid);
+        console.log("Node labels from API:", data.nodeLabels);
+        console.log("Has labels:", data.hasLabels);
+        
+        // Use nodeLabels from API if available, otherwise parse from Mermaid
+        const nodeLabels: Record<string, string> = data.nodeLabels || {};
+        
+        // If API didn't provide labels, try to parse them ourselves as fallback
+        if (Object.keys(nodeLabels).length === 0) {
+          console.warn("No nodeLabels from API, parsing from Mermaid syntax...");
+          const labelRegex = /(\w+)\s*(?:\[|\["|\(|\(\["|\{)(.*?)(?:\]|"\]|\)|"\)\]|\})/g;
+          const lines = data.mermaid.split('\n');
+          
+          lines.forEach((line: string) => {
+            const matches = Array.from(line.matchAll(labelRegex));
+            matches.forEach((match) => {
+              if (match[1] && match[2]) {
+                const label = match[2].replace(/\\n/g, '\n').replace(/^"|"$/g, '').trim();
+                if (label.length > 0) {
+                  nodeLabels[match[1]] = label;
+                }
+              }
+            });
+          });
+        }
+        
+        console.log("Final nodeLabels to use:", nodeLabels);
         
         try {
+          // Log the mermaid syntax for debugging
+          console.log("Attempting to parse Mermaid syntax:", data.mermaid.substring(0, 500));
+          
           const { elements } = await parseMermaidToExcalidraw(data.mermaid, {
             flowchart: {
               htmlLabels: false,
@@ -1066,38 +1095,23 @@ export default function RoomPage() {
           } as any);
           newElements = elements || [];
           
-          // FALLBACK: Manually inject text if missing
-          // Parse Mermaid syntax to extract labels: id["Label"] or id[Label]
-          // Regex to match: id["Label"] or id[Label] or id("Label") etc.
-          const labelRegex = new RegExp("(\\w+)\\s*(?:\\[|\\[\"|\\(\"|\\(\\[\"|\\{)(.*?)(?:\\]|\"\\]|\"\\)|\"\\)\\]|\\})");
-          const lines = data.mermaid.split('\n');
-          const nodeLabels: Record<string, string> = {};
-          
-          lines.forEach((line: string) => {
-            const match = line.match(labelRegex);
-            if (match && match[1] && match[2]) {
-              // Clean up label: replace \n with actual newlines, remove quotes
-              let label = match[2].replace(/\\n/g, '\n').replace(/^"|"$/g, '');
-              nodeLabels[match[1]] = label;
-            }
-          });
-
-          console.log("Extracted labels:", nodeLabels);
+          console.log(`Parsed ${newElements.length} elements from Mermaid`);
 
           // Helper to create text element
           const createTextElement = (text: string, container: any) => {
             const fontSize = 20;
             // Estimate width/height (rough approximation)
-            const lines = text.split('\n');
-            const width = Math.max(...lines.map(l => l.length)) * (fontSize * 0.6);
-            const height = lines.length * fontSize * 1.2;
+            const textLines = text.split('\n');
+            const maxLineLength = Math.max(...textLines.map(l => l.length));
+            const width = Math.max(maxLineLength * (fontSize * 0.6), 40); // Minimum width 40
+            const height = Math.max(textLines.length * fontSize * 1.2, fontSize * 1.2); // Minimum height
             
             return {
               type: "text",
               version: 1,
               versionNonce: Math.floor(Math.random() * 1000000),
               isDeleted: false,
-              id: `text_${container.id}`,
+              id: `text_${container.id}_${Date.now()}`,
               fillStyle: "hachure",
               strokeWidth: 1,
               strokeStyle: "solid",
@@ -1132,57 +1146,119 @@ export default function RoomPage() {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const finalElements: any[] = [...newElements];
           
-          // Try to match shapes to labels
-          // Since we don't have a direct ID mapping from the converter, we'll use a heuristic:
-          // The converter usually generates elements in the same order as the mermaid syntax definition (roughly).
-          // But better yet, let's look at the `text` property of the shape if it exists.
-          
+          // Collect all shape elements (rectangles, diamonds, ellipses) that need labels
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const shapeElements: any[] = [];
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           newElements.forEach((el: any) => {
             if (["rectangle", "diamond", "ellipse"].includes(el.type)) {
-              // Check if this shape already has a bound text element
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const hasText = newElements.some((t: any) => t.type === "text" && t.containerId === el.id);
+              shapeElements.push(el);
+            }
+          });
+          
+          console.log(`Found ${shapeElements.length} shape elements to check for labels`);
+          
+          // Track which labels we've used
+          const usedLabels = new Set<string>();
+          
+          // Strategy 1: Check if shape already has text element bound to it
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          shapeElements.forEach((el: any, index: number) => {
+            // Check if this shape already has a bound text element
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const hasText = newElements.some((t: any) => 
+              t.type === "text" && (t.containerId === el.id || el.boundElements?.some((be: any) => be.id === t.id))
+            );
+            
+            if (!hasText) {
+              let labelText: string | null = null;
               
-              if (!hasText) {
-                // Try to find a label
-                // 1. Check if el.text exists (some converters put it there)
-                let labelText = el.text;
-                
-                // 2. If not, try to match by looking at our parsed labels
-                // This is hard without the ID. 
-                // However, if we can't find it, we might just have to leave it empty or use a placeholder?
-                // Wait, if the converter failed to create text, it might have failed to attach the ID too.
-                
-                // Let's try to use the `text` property if available.
-                if (labelText && labelText.trim().length > 0) {
-                   console.log(`Found text in shape property: ${labelText}, creating text element...`);
-                   const textEl = createTextElement(labelText, el);
-                   finalElements.push(textEl);
-                   
-                   // Bind text to container
-                   if (!el.boundElements) el.boundElements = [];
-                   el.boundElements.push({ id: textEl.id, type: "text" });
-                } else {
-                   // Last resort: Check if we can match by some other property?
-                   // If not, we can't do much. But usually `htmlLabels: false` puts the text in `el.text`.
+              // Strategy 2: Check if el.text property exists (some converters put it there)
+              if (el.text && typeof el.text === "string" && el.text.trim().length > 0) {
+                labelText = el.text.trim();
+                console.log(`Found text in shape property for ${el.id}: ${labelText}`);
+              } 
+              // Strategy 3: Try to match by order (shapes usually match node order in Mermaid)
+              else if (Object.keys(nodeLabels).length > 0) {
+                // Get node IDs in order from Mermaid syntax
+                const nodeIds = Object.keys(nodeLabels);
+                if (index < nodeIds.length) {
+                  const nodeId = nodeIds[index];
+                  if (!usedLabels.has(nodeId)) {
+                    labelText = nodeLabels[nodeId];
+                    usedLabels.add(nodeId);
+                    console.log(`Matched label by order for ${el.id}: ${labelText} (from node ${nodeId})`);
+                  }
                 }
               }
+              
+              // Strategy 4: Try to find any unused label
+              if (!labelText && Object.keys(nodeLabels).length > 0) {
+                for (const [nodeId, label] of Object.entries(nodeLabels)) {
+                  if (!usedLabels.has(nodeId)) {
+                    labelText = label;
+                    usedLabels.add(nodeId);
+                    console.log(`Assigned unused label to ${el.id}: ${labelText} (from node ${nodeId})`);
+                    break;
+                  }
+                }
+              }
+              
+              // Create text element if we found a label
+              if (labelText && labelText.trim().length > 0) {
+                const textEl = createTextElement(labelText, el);
+                finalElements.push(textEl);
+                
+                // Bind text to container
+                if (!el.boundElements) el.boundElements = [];
+                el.boundElements.push({ id: textEl.id, type: "text" });
+                
+                // Also update the element in finalElements array
+                const elIndex = finalElements.findIndex((e: any) => e.id === el.id);
+                if (elIndex >= 0) {
+                  finalElements[elIndex] = { ...el, boundElements: el.boundElements };
+                }
+              } else {
+                console.warn(`No label found for shape ${el.id} at index ${index}`);
+              }
+            } else {
+              console.log(`Shape ${el.id} already has text element`);
             }
           });
           
           newElements = finalElements;
-          console.log(`Final element count: ${newElements.length}`);
+          
+          // Count text elements
+          const textCount = newElements.filter((el: any) => el.type === "text").length;
+          const shapeCount = newElements.filter((el: any) => ["rectangle", "diamond", "ellipse"].includes(el.type)).length;
+          
+          console.log(`Final element count: ${newElements.length} (${shapeCount} shapes, ${textCount} text elements)`);
+          
+          // Warn if we have shapes but no text
+          if (shapeCount > 0 && textCount === 0 && !data.hasLabels) {
+            console.warn("No text elements found and API indicates no labels. Diagram may appear empty.");
+            throw new Error("AI สร้างโครงไดอะแกรมได้แต่ไม่มีข้อความในกล่อง กรุณาลองพิมพ์ prompt ให้ละเอียดขึ้น เช่น 'สร้าง flowchart สำหรับระบบ login ที่มีขั้นตอน: เริ่มต้น, กรอกอีเมล, ตรวจสอบรหัสผ่าน, สำเร็จ'");
+          }
           
         } catch (conversionError) {
           console.error("Error converting Mermaid to Excalidraw:", conversionError);
           console.error("Mermaid syntax that failed:", data.mermaid);
           
-          // Show detailed error to user
-          const errorMsg = conversionError instanceof Error 
-            ? `Conversion failed: ${conversionError.message}` 
-            : "Failed to convert diagram. Please try again.";
-          throw new Error(errorMsg);
+          // Check if it's a parse error
+          const errorMessage = conversionError instanceof Error ? conversionError.message : String(conversionError);
+          
+          if (errorMessage.includes("Parse error") || errorMessage.includes("Expecting")) {
+            // Mermaid syntax parse error - provide helpful message
+            throw new Error(
+              "Mermaid syntax ที่ AI สร้างมีข้อผิดพลาด กรุณาลองอีกครั้งหรือปรับ prompt ให้ชัดเจนขึ้น " +
+              "(เช่น 'สร้าง flowchart สำหรับระบบ login ที่มีขั้นตอน: เริ่มต้น, กรอกอีเมล, ตรวจสอบรหัสผ่าน, สำเร็จ')"
+            );
+          }
+          
+          // Other errors
+          throw new Error(
+            errorMessage || "ไม่สามารถแปลงไดอะแกรมได้ กรุณาลองอีกครั้ง"
+          );
         }
       } else {
         // Fallback to direct elements (old behavior)

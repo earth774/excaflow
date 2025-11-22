@@ -13,6 +13,7 @@ import {
 } from "@/lib/storage";
 import { supabase } from "@/lib/supabaseClient";
 import { authenticatedFetch } from "@/lib/apiClient";
+import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
 import type { RoomIndexEntry, LocalRoom } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 
@@ -71,6 +72,51 @@ export default function Home() {
     // Optionally sync with server in background
     syncRoomsFromServer(loadedRooms);
 
+    // Check if we're returning from Stripe checkout or portal (check URL params)
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    const isSuccess = urlParams.get('success') === 'true';
+    const returnedFromPortal = urlParams.get('returned_from_portal') === 'true';
+
+    if (isSuccess && sessionId) {
+      // Confirm the checkout session and update subscription (fallback if webhook didn't fire)
+      const confirmSession = async () => {
+        try {
+          const response = await authenticatedFetch('/api/stripe/confirm-session', {
+            method: 'POST',
+            body: JSON.stringify({ sessionId }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Session confirmed:', data);
+          } else {
+            const error = await response.json();
+            console.error('Failed to confirm session:', error);
+            // Continue anyway - webhook might have already processed it
+          }
+        } catch (error) {
+          console.error('Error confirming session:', error);
+          // Continue anyway - webhook might have already processed it
+        } finally {
+          // Refresh subscription status after confirming session
+          fetchSubscriptionStatus();
+          // Clean up URL params
+          window.history.replaceState({}, '', '/dashboard');
+        }
+      };
+
+      // Small delay to ensure webhook has a chance to process first
+      setTimeout(confirmSession, 500);
+    } else if (returnedFromPortal) {
+      // Just refresh subscription status when returning from portal
+      setTimeout(() => {
+        fetchSubscriptionStatus();
+        // Clean up URL params
+        window.history.replaceState({}, '', '/dashboard');
+      }, 500);
+    }
+
     return () => {
       subscription.unsubscribe();
     };
@@ -123,7 +169,7 @@ export default function Home() {
     try {
       const response = await authenticatedFetch("/api/checkout", {
         method: "POST",
-        body: JSON.stringify({ priceId: "price_1SW5QdAbVL76kMms9YZzqK03" }), // Use the same price ID as landing page
+        body: JSON.stringify({ priceId: STRIPE_PRICE_ID }),
       });
 
       const { url, error } = await response.json();
@@ -395,20 +441,30 @@ export default function Home() {
             <div className="flex items-center gap-4">
               {!isLoadingSubscription && (
                 isPro ? (
-                  <button
-                    onClick={handleManageSubscription}
-                    className="text-sm font-medium text-violet-600 hover:text-violet-700 px-3 py-1.5 rounded-lg hover:bg-violet-50 transition-colors"
-                  >
-                    Manage Subscription
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white">
+                      Package Pro
+                    </span>
+                    <button
+                      onClick={handleManageSubscription}
+                      className="text-xs text-gray-400 hover:text-gray-600 transition-colors underline"
+                    >
+                      Manage
+                    </button>
+                  </div>
                 ) : (
-                  <button
-                    onClick={handleCheckout}
-                    disabled={isCheckingOut}
-                    className="text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 px-4 py-2 rounded-lg shadow-sm transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isCheckingOut ? "Processing..." : "Upgrade to Pro"}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">
+                      Mode Free
+                    </span>
+                    <button
+                      onClick={handleCheckout}
+                      disabled={isCheckingOut}
+                      className="text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 px-4 py-2 rounded-lg shadow-sm transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isCheckingOut ? "Processing..." : "Upgrade to Pro"}
+                    </button>
+                  </div>
                 )
               )}
               <div className="hidden md:flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
