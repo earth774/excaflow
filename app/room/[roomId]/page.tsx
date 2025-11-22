@@ -11,6 +11,7 @@ import {
 } from "@/lib/storage";
 import { authenticatedFetch } from "@/lib/apiClient";
 import type { ExcalidrawScene, LocalRoom, RoomStatus } from "@/lib/types";
+import { parseMermaidToExcalidraw } from "@excalidraw/mermaid-to-excalidraw";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sanitizeAppState = (appState: any = {}) => {
@@ -1045,7 +1046,147 @@ export default function RoomPage() {
       }
 
       const data = await response.json();
-      const newElements = data.elements || [];
+      
+      // Check if we need to convert Mermaid to Excalidraw on client-side
+      let newElements;
+      
+      if (data.convertOnClient && data.mermaid) {
+        console.log("Converting Mermaid to Excalidraw on client...");
+        console.log("Mermaid syntax to convert:", data.mermaid);
+        
+        try {
+          const { elements } = await parseMermaidToExcalidraw(data.mermaid, {
+            flowchart: {
+              htmlLabels: false,
+            },
+            themeVariables: {
+              fontSize: "20px",
+            }
+          } as any);
+          newElements = elements || [];
+          
+          // FALLBACK: Manually inject text if missing
+          // Parse Mermaid syntax to extract labels: id["Label"] or id[Label]
+          // Regex to match: id["Label"] or id[Label] or id("Label") etc.
+          const labelRegex = new RegExp("(\\w+)\\s*(?:\\[|\\[\"|\\(\"|\\(\\[\"|\\{)(.*?)(?:\\]|\"\\]|\"\\)|\"\\)\\]|\\})");
+          const lines = data.mermaid.split('\n');
+          const nodeLabels: Record<string, string> = {};
+          
+          lines.forEach((line: string) => {
+            const match = line.match(labelRegex);
+            if (match && match[1] && match[2]) {
+              // Clean up label: replace \n with actual newlines, remove quotes
+              let label = match[2].replace(/\\n/g, '\n').replace(/^"|"$/g, '');
+              nodeLabels[match[1]] = label;
+            }
+          });
+
+          console.log("Extracted labels:", nodeLabels);
+
+          // Helper to create text element
+          const createTextElement = (text: string, container: any) => {
+            const fontSize = 20;
+            // Estimate width/height (rough approximation)
+            const lines = text.split('\n');
+            const width = Math.max(...lines.map(l => l.length)) * (fontSize * 0.6);
+            const height = lines.length * fontSize * 1.2;
+            
+            return {
+              type: "text",
+              version: 1,
+              versionNonce: Math.floor(Math.random() * 1000000),
+              isDeleted: false,
+              id: `text_${container.id}`,
+              fillStyle: "hachure",
+              strokeWidth: 1,
+              strokeStyle: "solid",
+              roughness: 1,
+              opacity: 100,
+              angle: 0,
+              x: container.x + (container.width - width) / 2,
+              y: container.y + (container.height - height) / 2,
+              strokeColor: "#000000",
+              backgroundColor: "transparent",
+              width: width,
+              height: height,
+              seed: Math.floor(Math.random() * 1000000),
+              groupIds: container.groupIds || [],
+              frameId: null,
+              roundness: null,
+              boundElements: [],
+              updated: Date.now(),
+              link: null,
+              locked: false,
+              text: text,
+              fontSize: fontSize,
+              fontFamily: 1,
+              textAlign: "center",
+              verticalAlign: "middle",
+              containerId: container.id,
+              originalText: text,
+            };
+          };
+
+          // Inject text if missing
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const finalElements: any[] = [...newElements];
+          
+          // Try to match shapes to labels
+          // Since we don't have a direct ID mapping from the converter, we'll use a heuristic:
+          // The converter usually generates elements in the same order as the mermaid syntax definition (roughly).
+          // But better yet, let's look at the `text` property of the shape if it exists.
+          
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          newElements.forEach((el: any) => {
+            if (["rectangle", "diamond", "ellipse"].includes(el.type)) {
+              // Check if this shape already has a bound text element
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const hasText = newElements.some((t: any) => t.type === "text" && t.containerId === el.id);
+              
+              if (!hasText) {
+                // Try to find a label
+                // 1. Check if el.text exists (some converters put it there)
+                let labelText = el.text;
+                
+                // 2. If not, try to match by looking at our parsed labels
+                // This is hard without the ID. 
+                // However, if we can't find it, we might just have to leave it empty or use a placeholder?
+                // Wait, if the converter failed to create text, it might have failed to attach the ID too.
+                
+                // Let's try to use the `text` property if available.
+                if (labelText && labelText.trim().length > 0) {
+                   console.log(`Found text in shape property: ${labelText}, creating text element...`);
+                   const textEl = createTextElement(labelText, el);
+                   finalElements.push(textEl);
+                   
+                   // Bind text to container
+                   if (!el.boundElements) el.boundElements = [];
+                   el.boundElements.push({ id: textEl.id, type: "text" });
+                } else {
+                   // Last resort: Check if we can match by some other property?
+                   // If not, we can't do much. But usually `htmlLabels: false` puts the text in `el.text`.
+                }
+              }
+            }
+          });
+          
+          newElements = finalElements;
+          console.log(`Final element count: ${newElements.length}`);
+          
+        } catch (conversionError) {
+          console.error("Error converting Mermaid to Excalidraw:", conversionError);
+          console.error("Mermaid syntax that failed:", data.mermaid);
+          
+          // Show detailed error to user
+          const errorMsg = conversionError instanceof Error 
+            ? `Conversion failed: ${conversionError.message}` 
+            : "Failed to convert diagram. Please try again.";
+          throw new Error(errorMsg);
+        }
+      } else {
+        // Fallback to direct elements (old behavior)
+        newElements = data.elements || [];
+      }
 
       if (!Array.isArray(newElements) || newElements.length === 0) {
         throw new Error("No elements generated");

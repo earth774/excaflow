@@ -5,6 +5,41 @@ import { useState } from "react";
 
 export default function LandingPage() {
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleCheckout = async (priceId: string) => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ priceId }),
+      });
+
+      const { url, error } = await response.json();
+
+      if (error) {
+        console.error("Error:", error);
+        alert("Checkout failed: " + error);
+        setLoading(false);
+        return;
+      }
+
+      if (url) {
+        window.location.href = url;
+      } else {
+        setLoading(false);
+        alert("Failed to start checkout.");
+      }
+    } catch (err) {
+      console.error("Checkout error:", err);
+      alert("An unexpected error occurred.");
+    } finally {
+      // setLoading(false); // Don't reset loading if redirecting
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] relative overflow-hidden">
@@ -302,12 +337,13 @@ export default function LandingPage() {
                 ))}
               </ul>
 
-              <Link
-                href="/signup"
-                className="block w-full py-3.5 px-6 text-center bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white font-semibold rounded-xl transition-all transform hover:-translate-y-0.5 shadow-lg shadow-violet-500/30"
+              <button
+                onClick={() => handleCheckout("price_1234567890")} // Replace with your actual Stripe Price ID
+                disabled={loading}
+                className="block w-full py-3.5 px-6 text-center bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white font-semibold rounded-xl transition-all transform hover:-translate-y-0.5 shadow-lg shadow-violet-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Start Pro Trial
-              </Link>
+                {loading ? "Processing..." : "Start Pro Trial"}
+              </button>
             </div>
           </div>
         </div>

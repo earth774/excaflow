@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai, getModelName, isOpenAIConfigured } from "@/lib/openai";
 
-// System prompt that explains Excalidraw elements structure
-// System prompt with Grid-Based Layout and Chain of Thought
-// System prompt with Grid-Based Layout and Chain of Thought
-const SYSTEM_PROMPT = `You are an expert system architect and UI designer specialized in creating Excalidraw diagrams.
+// System prompt for Excalidraw elements structure
+const EXCALIDRAW_SYSTEM_PROMPT = `You are an expert system architect and UI designer specialized in creating Excalidraw diagrams.
 Your goal is to generate clear, logical, and visually organized flowcharts based on user descriptions.
 
 ### CORE METHODOLOGY: GRID-BASED LAYOUT
@@ -93,6 +91,121 @@ Each element must follow this structure:
 
 Generate the JSON for the user's request. Focus on LOGICAL FLOW, ALIGNMENT, and CONNECTIVITY.`;
 
+// System prompt for Mermaid syntax
+const MERMAID_SYSTEM_PROMPT = `You are an expert system architect specialized in creating Mermaid diagrams.
+Your goal is to generate clear, logical, and well-structured diagrams using Mermaid syntax based on user descriptions.
+
+### MERMAID DIAGRAM TYPES
+Choose the most appropriate diagram type based on the user's request:
+- **Flowchart**: For processes, workflows, and decision trees
+- **Sequence Diagram**: For interactions between entities over time
+- **Class Diagram**: For object-oriented structures and relationships
+- **State Diagram**: For state machines and transitions
+- **ER Diagram**: For database relationships
+- **Gantt Chart**: For project schedules and timelines
+- **Pie Chart**: For data distribution
+- **Git Graph**: For version control branching
+
+### FLOWCHART SYNTAX (Most Common)
+\`\`\`mermaid
+flowchart TD
+    A[Start] --> B{Is it working?}
+    B -->|Yes| C[Great]
+    B -->|No| D[Debug]
+    D --> E[Test Again]
+    E --> B
+    C --> F[End]
+\`\`\`
+
+**Node Shapes**:
+- \`[Text]\` - Rectangle (for processes)
+- \`{Text}\` - Diamond (for decisions)
+- \`([Text])\` - Stadium/Pill shape (for start/end)
+- \`[(Text)]\` - Cylinder (for databases)
+- \`((Text))\` - Circle
+- \`[\\Text/]\` - Trapezoid
+
+**Flow Directions**:
+- TD (Top Down), TB (Top to Bottom)
+- BT (Bottom to Top)
+- LR (Left to Right)
+- RL (Right to Left)
+
+**Connections**:
+- \`-->\` - Arrow
+- \`---\` - Line
+- \`-.->\` - Dotted arrow
+- \`==>\` - Thick arrow
+- \`-->|Text|\` - Arrow with label
+
+### SEQUENCE DIAGRAM SYNTAX
+\`\`\`mermaid
+sequenceDiagram
+    participant A as User
+    participant B as Server
+    A->>B: Request
+    B-->>A: Response
+\`\`\`
+
+### CLASS DIAGRAM SYNTAX
+\`\`\`mermaid
+classDiagram
+    class Animal {
+        +name: string
+        +age: int
+        +makeSound()
+    }
+    Animal <|-- Dog
+\`\`\`
+
+### OUTPUT FORMAT
+Return a JSON object with:
+\`\`\`json
+{
+  "mermaid": "flowchart TD\\n    A[Start] --> B[End]",
+  "type": "flowchart"
+}
+\`\`\`
+
+### CRITICAL RULES FOR TEXT LABELS:
+1. **USE DOUBLE QUOTES** for all labels - e.g., \`id["Label Text"]\`
+2. **Newlines ARE allowed** inside quotes - use \`\\n\` for line breaks
+3. **Escape quotes** inside labels if needed - e.g., \`"Say \\"Hello\\""\`
+4. **Use simple IDs** - Like A, B, C or start, login, success
+5. **Proper indentation** - 4 spaces per level
+6. **Use \\n for newlines** in JSON response (between nodes)
+
+### RESERVED KEYWORDS - DO NOT USE AS NODE IDs:
+**CRITICAL:** These words are reserved in Mermaid and CANNOT be used as node IDs:
+- ❌ \`end\` - Use \`finish\`, \`done\`, \`complete\`, \`final\` instead
+- ❌ \`graph\`, \`subgraph\`, \`style\`, \`class\`, \`click\`
+- ❌ \`direction\`, \`flowchart\`
+
+### EXAMPLE - Good vs Bad:
+❌ BAD: \`start(Start Process)\` (no quotes, might break with special chars)
+✅ GOOD: \`start["Start Process"]\`
+
+❌ BAD: \`login[Login\nPage]\` (newlines without quotes might fail)
+✅ GOOD: \`login["Login\nPage"]\`
+
+❌ BAD: \`end["End"]\` (reserved keyword ID)
+✅ GOOD: \`finish["End"]\`
+
+### COMPLEX EXAMPLE (Follow this style):
+\`\`\`mermaid
+flowchart TD
+    Start["Start Flow"] --> Input["Receive Data\n(Name, ID, Date)"]
+    Input --> Check{"Check Data\nIs it valid?"}
+    Check -->|No| Error["Show Error\nInvalid Input"]
+    Error --> End["End Process"]
+    Check -->|Yes| Process["Process Data\nSave to DB"]
+    Process --> Success["Success"]
+    Success --> End
+\`\`\`
+
+Generate clean, professional Mermaid syntax.
+REMEMBER: Always wrap label text in double quotes \`["Like This"]\`.`;
+
 export async function POST(request: NextRequest) {
   try {
     // Check if OpenAI is configured
@@ -104,11 +217,19 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { prompt } = body;
+    const { prompt, format = "excalidraw" } = body;
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
       return NextResponse.json(
         { error: "Prompt is required and must be a non-empty string" },
+        { status: 400 }
+      );
+    }
+
+    // Validate format parameter
+    if (format !== "excalidraw" && format !== "mermaid") {
+      return NextResponse.json(
+        { error: "Format must be either 'excalidraw' or 'mermaid'" },
         { status: 400 }
       );
     }
@@ -124,103 +245,122 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // STRATEGY: Always generate Mermaid syntax first for better symmetry
+    // Then convert to Excalidraw if needed
+    const systemPrompt = MERMAID_SYSTEM_PROMPT;
+    const userMessage = `Generate a Mermaid diagram for: ${sanitizedPrompt}`;
+
+    // Detect reasoning models (o1, gpt-5, etc.) - they have different requirements
+    const modelName = getModelName();
+    const isReasoningModel = modelName.startsWith("o1") || modelName.startsWith("gpt-5");
+    
+    // Reasoning models need different handling:
+    // - Don't support system messages (must use user messages only)
+    // - Don't support response_format
+    // - Need MORE tokens (reasoning tokens + output tokens)
+    const messages = isReasoningModel 
+      ? [
+          {
+            role: "user" as const,
+            content: `${systemPrompt}\n\n---\n\n${userMessage}`,
+          },
+        ]
+      : [
+          {
+            role: "system" as const,
+            content: systemPrompt,
+          },
+          {
+            role: "user" as const,
+            content: userMessage,
+          },
+        ];
+
+    // Build API call parameters
+    const apiParams: any = {
+      model: modelName,
+      messages,
+      // Reasoning models need 10-20x more tokens (they use tokens for thinking)
+      max_completion_tokens: isReasoningModel ? 32000 : 4000,
+    };
+
+    // Only add response_format if NOT a reasoning model
+    if (!isReasoningModel) {
+      apiParams.response_format = { type: "json_object" };
+    }
+
     // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: getModelName(),
-      messages: [
-        {
-          role: "system",
-          content: SYSTEM_PROMPT,
-        },
-        {
-          role: "user",
-          content: `Generate an Excalidraw diagram for: ${sanitizedPrompt}`,
-        },
-      ],
-      temperature: 0.3, // Lower temperature for more consistent, structured flowcharts
-      max_tokens: 4000, // More tokens for complex flowcharts with text labels
-      response_format: { type: "json_object" }, // Force JSON response
+    console.log(`Calling OpenAI with model: ${modelName} (reasoning: ${isReasoningModel})`);
+    const completion = await openai.chat.completions.create(apiParams);
+
+    console.log("OpenAI response received:", {
+      hasChoices: !!completion.choices,
+      choicesLength: completion.choices?.length,
+      hasMessage: !!completion.choices?.[0]?.message,
+      hasContent: !!completion.choices?.[0]?.message?.content,
+      contentLength: completion.choices?.[0]?.message?.content?.length,
+      finishReason: completion.choices?.[0]?.finish_reason,
+      usage: completion.usage,
     });
 
     const responseContent = completion.choices[0]?.message?.content;
 
     if (!responseContent) {
+      console.error("No response content from OpenAI. Full response:", JSON.stringify(completion, null, 2));
       return NextResponse.json(
-        { error: "No response from OpenAI" },
+        { 
+          error: "No response from OpenAI",
+          details: {
+            finishReason: completion.choices?.[0]?.finish_reason,
+            hasChoices: !!completion.choices,
+            choicesLength: completion.choices?.length,
+          }
+        },
         { status: 500 }
       );
     }
 
-    // Parse JSON response
-    let elements;
+    // Parse the Mermaid response
+    let mermaidSyntax: string;
+    let diagramType: string;
+    
     try {
       const parsed = JSON.parse(responseContent);
-      // Handle JSON object with "elements" key (required for json_object format)
-      if (parsed && typeof parsed === "object" && "elements" in parsed) {
-        elements = parsed.elements;
-      } else if (Array.isArray(parsed)) {
-        // Fallback: if it's already an array
-        elements = parsed;
-      } else {
-        throw new Error("Response does not contain elements array");
-      }
       
-      if (!Array.isArray(elements)) {
-        throw new Error("Response elements is not an array");
+      if (!parsed || typeof parsed !== "object" || !("mermaid" in parsed)) {
+        throw new Error("Response does not contain mermaid syntax");
       }
+
+      mermaidSyntax = parsed.mermaid;
+      diagramType = parsed.type || "flowchart";
+      
+      console.log("Mermaid syntax generated:", mermaidSyntax.substring(0, 200) + "...");
     } catch (parseError) {
-      console.error("Error parsing OpenAI response:", parseError);
+      console.error("Error parsing Mermaid response:", parseError);
       console.error("Response content:", responseContent);
       return NextResponse.json(
-        { error: "Invalid JSON response from AI", details: String(parseError) },
+        { error: "Invalid Mermaid response from AI", details: String(parseError) },
         { status: 500 }
       );
     }
 
-    // Validate and sanitize elements
-    if (!elements || !Array.isArray(elements)) {
-      return NextResponse.json(
-        { error: "Invalid elements array in response" },
-        { status: 500 }
-      );
+    // If user requested Mermaid format, return it directly
+    if (format === "mermaid") {
+      return NextResponse.json({
+        mermaid: mermaidSyntax,
+        type: diagramType,
+        format: "mermaid",
+        success: true,
+      });
     }
 
-    const sanitizedElements = (elements || [])
-      .filter((el: unknown) => el && typeof el === "object" && el !== null)
-      .map((el: Record<string, unknown>, index: number) => {
-        // Ensure required fields exist
-        return {
-          id: el.id || `element-${index + 1}`,
-          type: el.type || "rectangle",
-          x: typeof el.x === "number" ? el.x : 100 + index * 50,
-          y: typeof el.y === "number" ? el.y : 100 + index * 50,
-          width: typeof el.width === "number" ? Math.max(50, el.width) : 100,
-          height: typeof el.height === "number" ? Math.max(50, el.height) : 100,
-          angle: typeof el.angle === "number" ? el.angle : 0,
-          strokeColor: el.strokeColor || "#1e1e1e",
-          backgroundColor: el.backgroundColor || "transparent",
-          fillStyle: el.fillStyle || "solid",
-          strokeWidth: typeof el.strokeWidth === "number" ? el.strokeWidth : 2,
-          strokeStyle: el.strokeStyle || "solid",
-          roughness: typeof el.roughness === "number" ? el.roughness : 1,
-          opacity: typeof el.opacity === "number" ? el.opacity : 100,
-          versionNonce: el.versionNonce || Math.floor(Math.random() * 1000000),
-          ...(el.type === "text" && { 
-            text: el.text || "", 
-            fontSize: el.fontSize || 20,
-            textAlign: el.textAlign || "center",
-            verticalAlign: el.verticalAlign || "middle",
-            fontFamily: typeof el.fontFamily === "number" ? el.fontFamily : 1
-          }),
-          ...(el.type === "arrow" || el.type === "line" || el.type === "freedraw" 
-            ? { points: Array.isArray(el.points) ? el.points : [[0, 0], [100, 100]] }
-            : {}),
-        };
-      })
-      .slice(0, 50); // Limit to 50 elements max
-
+    // For Excalidraw format, return Mermaid syntax for CLIENT-SIDE conversion
+    // (parseMermaidToExcalidraw requires DOM which isn't available in API routes)
     return NextResponse.json({
-      elements: sanitizedElements,
+      mermaid: mermaidSyntax,
+      type: diagramType,
+      format: "excalidraw",
+      convertOnClient: true, // Signal to client to convert
       success: true,
     });
   } catch (error: unknown) {
