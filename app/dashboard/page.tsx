@@ -27,6 +27,7 @@ export default function Home() {
   const [syncingRooms, setSyncingRooms] = useState<Set<string>>(new Set());
   const [isPro, setIsPro] = useState(false);
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -114,6 +115,34 @@ export default function Home() {
     } catch (error) {
       console.error("Error opening portal:", error);
       alert("Something went wrong");
+    }
+  };
+
+  const handleCheckout = async () => {
+    setIsCheckingOut(true);
+    try {
+      const response = await authenticatedFetch("/api/checkout", {
+        method: "POST",
+        body: JSON.stringify({ priceId: "price_1SW5QdAbVL76kMms9YZzqK03" }), // Use the same price ID as landing page
+      });
+
+      const { url, error } = await response.json();
+
+      if (error) {
+        alert("Checkout failed: " + error);
+        return;
+      }
+
+      if (url) {
+        window.location.href = url;
+      } else {
+        alert("Failed to start checkout.");
+      }
+    } catch (err) {
+      console.error("Checkout error:", err);
+      alert("An unexpected error occurred.");
+    } finally {
+      setIsCheckingOut(false);
     }
   };
 
@@ -373,12 +402,13 @@ export default function Home() {
                     Manage Subscription
                   </button>
                 ) : (
-                  <Link
-                    href="/#pricing"
-                    className="text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 px-4 py-2 rounded-lg shadow-sm transition-all transform hover:-translate-y-0.5"
+                  <button
+                    onClick={handleCheckout}
+                    disabled={isCheckingOut}
+                    className="text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 px-4 py-2 rounded-lg shadow-sm transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Upgrade to Pro
-                  </Link>
+                    {isCheckingOut ? "Processing..." : "Upgrade to Pro"}
+                  </button>
                 )
               )}
               <div className="hidden md:flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">

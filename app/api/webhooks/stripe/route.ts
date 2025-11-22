@@ -18,43 +18,84 @@ export async function POST(req: Request) {
       process.env.STRIPE_WEBHOOK_SECRET!
     );
   } catch (error: any) {
+    console.error(`Webhook signature verification failed: ${error.message}`);
     return NextResponse.json({ error: `Webhook Error: ${error.message}` }, { status: 400 });
   }
 
-  const session = event.data.object as Stripe.Checkout.Session;
+  console.log(`Received webhook event: ${event.type}`);
 
-  if (event.type === 'checkout.session.completed') {
-    const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
 
-    if (!session?.metadata?.userId) {
-      return NextResponse.json({ error: 'User id is required' }, { status: 400 });
+      if (!session?.metadata?.userId) {
+        return NextResponse.json({ error: 'User id is required' }, { status: 400 });
+      }
+
+      await prisma.user.update({
+        where: {
+          id: session.metadata.userId,
+        },
+        data: {
+          stripeSubscriptionId: subscription.id,
+          stripeCustomerId: subscription.customer as string,
+          stripePriceId: subscription.items.data[0].price.id,
+          stripeCurrentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+        },
+      });
     }
 
-    await prisma.user.update({
-      where: {
-        id: session.metadata.userId,
-      },
-      data: {
-        stripeSubscriptionId: subscription.id,
-        stripeCustomerId: subscription.customer as string,
-        stripePriceId: subscription.items.data[0].price.id,
-        stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      },
-    });
-  }
+    if (event.type === 'invoice.payment_succeeded') {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscriptionId = (invoice as any).subscription as string;
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-  if (event.type === 'invoice.payment_succeeded') {
-    const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+      // Only update if user exists with this subscription ID
+      // This prevents race conditions where checkout.session.completed hasn't run yet
+      const user = await prisma.user.findUnique({
+        where: { stripeSubscriptionId: subscription.id },
+      });
 
-    await prisma.user.update({
-      where: {
-        stripeSubscriptionId: subscription.id,
-      },
-      data: {
-        stripePriceId: subscription.items.data[0].price.id,
-        stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      },
-    });
+      if (user) {
+        await prisma.user.update({
+          where: {
+            stripeSubscriptionId: subscription.id,
+          },
+          data: {
+            stripePriceId: subscription.items.data[0].price.id,
+            stripeCurrentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+          },
+        });
+      }
+    }
+
+    if (event.type === 'customer.subscription.updated') {
+      const subscription = event.data.object as Stripe.Subscription;
+      
+      await prisma.user.update({
+        where: { stripeSubscriptionId: subscription.id },
+        data: {
+          stripePriceId: subscription.items.data[0].price.id,
+          stripeCurrentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+        },
+      });
+    }
+
+    if (event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object as Stripe.Subscription;
+      
+      await prisma.user.update({
+        where: { stripeSubscriptionId: subscription.id },
+        data: {
+          stripePriceId: null,
+          stripeCurrentPeriodEnd: null,
+        },
+      });
+    }
+  } catch (error) {
+    console.error('Webhook handler failed:', error);
+    return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
   }
 
   return NextResponse.json({ received: true }, { status: 200 });

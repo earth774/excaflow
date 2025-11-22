@@ -66,8 +66,8 @@ export async function POST(req: Request) {
       metadata: {
         userId: user.id,
       },
-      success_url: `${baseUrl}/?success=true`,
-      cancel_url: `${baseUrl}/?canceled=true`,
+      success_url: `${baseUrl}/dashboard`,
+      cancel_url: `${baseUrl}/dashboard`,
     });
 
     return NextResponse.json({ sessionId: session.id, url: session.url });
