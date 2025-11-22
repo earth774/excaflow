@@ -1048,7 +1048,8 @@ export default function RoomPage() {
       const data = await response.json();
       
       // Check if we need to convert Mermaid to Excalidraw on client-side
-      let newElements;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let newElements: any[] = [];
       
       if (data.convertOnClient && data.mermaid) {
         console.log("Converting Mermaid to Excalidraw on client...");
