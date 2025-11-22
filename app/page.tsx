@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { supabase } from "@/lib/supabaseClient";
+
 export default function LandingPage() {
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -10,10 +12,19 @@ export default function LandingPage() {
   const handleCheckout = async (priceId: string) => {
     setLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        alert("Please sign in to upgrade.");
+        window.location.href = "/login";
+        return;
+      }
+
       const response = await fetch("/api/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ priceId }),
       });
@@ -338,7 +349,7 @@ export default function LandingPage() {
               </ul>
 
               <button
-                onClick={() => handleCheckout("price_1234567890")} // Replace with your actual Stripe Price ID
+                onClick={() => handleCheckout("price_1SW5QdAbVL76kMms9YZzqK03")} // Replace with your actual Stripe Price ID
                 disabled={loading}
                 className="block w-full py-3.5 px-6 text-center bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white font-semibold rounded-xl transition-all transform hover:-translate-y-0.5 shadow-lg shadow-violet-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >

@@ -25,6 +25,8 @@ export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [syncingRooms, setSyncingRooms] = useState<Set<string>>(new Set());
+  const [isPro, setIsPro] = useState(false);
+  const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
 
   useEffect(() => {
     setIsClient(true);
@@ -39,6 +41,7 @@ export default function Home() {
         }
         setUser(user);
         setIsLoading(false);
+        fetchSubscriptionStatus();
       } catch {
         router.push("/login");
       }
@@ -55,6 +58,7 @@ export default function Home() {
       } else {
         setUser(session.user);
         setIsLoading(false);
+        fetchSubscriptionStatus();
       }
     });
 
@@ -81,6 +85,37 @@ export default function Home() {
       setFilteredRooms(filtered);
     }
   }, [searchQuery, rooms]);
+
+  const fetchSubscriptionStatus = async () => {
+    try {
+      const response = await authenticatedFetch("/api/subscription");
+      if (response.ok) {
+        const data = await response.json();
+        setIsPro(data.isPro);
+      }
+    } catch (error) {
+      console.error("Error fetching subscription:", error);
+    } finally {
+      setIsLoadingSubscription(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      const response = await authenticatedFetch("/api/portal", {
+        method: "POST",
+      });
+      const { url } = await response.json();
+      if (url) {
+        window.location.href = url;
+      } else {
+        alert("Failed to open subscription portal");
+      }
+    } catch (error) {
+      console.error("Error opening portal:", error);
+      alert("Something went wrong");
+    }
+  };
 
   const syncRoomsFromServer = async (localRooms: RoomIndexEntry[]) => {
     try {
@@ -329,6 +364,23 @@ export default function Home() {
               </span>
             </div>
             <div className="flex items-center gap-4">
+              {!isLoadingSubscription && (
+                isPro ? (
+                  <button
+                    onClick={handleManageSubscription}
+                    className="text-sm font-medium text-violet-600 hover:text-violet-700 px-3 py-1.5 rounded-lg hover:bg-violet-50 transition-colors"
+                  >
+                    Manage Subscription
+                  </button>
+                ) : (
+                  <Link
+                    href="/#pricing"
+                    className="text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 px-4 py-2 rounded-lg shadow-sm transition-all transform hover:-translate-y-0.5"
+                  >
+                    Upgrade to Pro
+                  </Link>
+                )
+              )}
               <div className="hidden md:flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 {user.email}
