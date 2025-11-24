@@ -29,6 +29,9 @@ export default function Home() {
   const [isPro, setIsPro] = useState(false);
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
 
   useEffect(() => {
     setIsClient(true);
@@ -64,8 +67,12 @@ export default function Home() {
       }
     });
 
-    // Load rooms from localStorage index
-    const loadedRooms = loadRoomsIndex();
+    // Load rooms from localStorage index and sort by updatedAt (most recent first)
+    const loadedRooms = loadRoomsIndex().sort((a, b) => {
+      const dateA = new Date(a.updatedAt || a.createdAt).getTime();
+      const dateB = new Date(b.updatedAt || b.createdAt).getTime();
+      return dateB - dateA; // Descending order (newest first)
+    });
     setRooms(loadedRooms);
     setFilteredRooms(loadedRooms);
 
@@ -122,6 +129,7 @@ export default function Home() {
     };
   }, [router]);
 
+
   useEffect(() => {
     if (searchQuery.trim() === "") {
       setFilteredRooms(rooms);
@@ -131,7 +139,20 @@ export default function Home() {
       );
       setFilteredRooms(filtered);
     }
+    setCurrentPage(1); // Reset to first page on search
   }, [searchQuery, rooms]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredRooms.length / itemsPerPage);
+  const paginatedRooms = filteredRooms.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const fetchSubscriptionStatus = async () => {
     try {
@@ -235,7 +256,11 @@ export default function Home() {
       }
 
       if (newRooms.length > 0) {
-        const updated = [...localRooms, ...newRooms];
+        const updated = [...localRooms, ...newRooms].sort((a, b) => {
+          const dateA = new Date(a.updatedAt || a.createdAt).getTime();
+          const dateB = new Date(b.updatedAt || b.createdAt).getTime();
+          return dateB - dateA; // Descending order (newest first)
+        });
         setRooms(updated);
         setFilteredRooms(updated);
       }
@@ -285,7 +310,11 @@ export default function Home() {
       await saveLocalRoom(localRoom);
       
       // Update rooms list
-      const updatedRooms = loadRoomsIndex();
+      const updatedRooms = loadRoomsIndex().sort((a, b) => {
+        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
+        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
       setRooms(updatedRooms);
       setFilteredRooms(updatedRooms);
       
@@ -336,7 +365,11 @@ export default function Home() {
       );
 
       // Refresh rooms list
-      const updatedRooms = loadRoomsIndex();
+      const updatedRooms = loadRoomsIndex().sort((a, b) => {
+        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
+        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
       setRooms(updatedRooms);
       setFilteredRooms(updatedRooms);
     } catch (error) {
@@ -380,7 +413,11 @@ export default function Home() {
       await deleteLocalRoom(roomId);
       
       // Refresh rooms list
-      const updatedRooms = loadRoomsIndex();
+      const updatedRooms = loadRoomsIndex().sort((a, b) => {
+        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
+        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
       setRooms(updatedRooms);
       setFilteredRooms(updatedRooms);
     } catch (error) {
@@ -395,7 +432,11 @@ export default function Home() {
       const newTitle = prompt("แก้ไขชื่อห้อง:", room.title);
       if (newTitle && newTitle.trim()) {
         await updateLocalRoomMetadata(roomId, { title: newTitle.trim() });
-        const updatedRooms = loadRoomsIndex();
+        const updatedRooms = loadRoomsIndex().sort((a, b) => {
+          const dateA = new Date(a.updatedAt || a.createdAt).getTime();
+          const dateB = new Date(b.updatedAt || b.createdAt).getTime();
+          return dateB - dateA; // Descending order (newest first)
+        });
         setRooms(updatedRooms);
         setFilteredRooms(updatedRooms);
       }
@@ -506,8 +547,8 @@ export default function Home() {
         </div>
 
         {/* Search and Filter */}
-        <div className="mb-8">
-          <div className="relative max-w-lg">
+        <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="relative max-w-lg w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
@@ -520,6 +561,36 @@ export default function Home() {
               placeholder="Search rooms..."
               className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent sm:text-sm shadow-sm transition-all"
             />
+          </div>
+
+          {/* View Toggle */}
+          <div className="flex items-center bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded-md transition-all ${
+                viewMode === 'grid'
+                  ? 'bg-violet-100 text-violet-600 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+              }`}
+              title="Grid View"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-md transition-all ${
+                viewMode === 'list'
+                  ? 'bg-violet-100 text-violet-600 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+              }`}
+              title="List View"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -555,102 +626,257 @@ export default function Home() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRooms.map((room) => {
-              const isSyncing = syncingRooms.has(room.id);
-              const lastSynced = room.lastSyncedAt
-                ? new Date(room.lastSyncedAt).toLocaleString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "numeric",
-                  })
-                : null;
+          <>
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedRooms.map((room) => {
+                  const isSyncing = syncingRooms.has(room.id);
+                  const lastSynced = room.lastSyncedAt
+                    ? new Date(room.lastSyncedAt).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "numeric",
+                      })
+                    : null;
 
-              return (
-                <div
-                  key={room.id}
-                  className="group bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden"
-                >
-                  <div className="p-6 flex-1">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="p-2 bg-violet-50 rounded-lg text-violet-600 group-hover:bg-violet-100 transition-colors">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {room.status === "local-only" ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                            Local
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Synced
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate" title={room.title}>
-                      {room.title}
-                    </h3>
-                    
-                    <div className="text-sm text-gray-500 flex items-center gap-1.5">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                      </svg>
-                      {lastSynced ? `Synced ${lastSynced}` : "Not synced yet"}
-                    </div>
-                  </div>
-
-                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                    <Link
-                      href={`/room/${room.id}`}
-                      className="text-sm font-medium text-violet-600 hover:text-violet-700 transition-colors"
+                  return (
+                    <div
+                      key={room.id}
+                      className="group bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden"
                     >
-                      Open Room &rarr;
-                    </Link>
-                    
-                    <div className="flex items-center gap-1">
-                      {room.status === "local-only" && (
-                        <button
-                          onClick={() => handleSyncRoom(room.id)}
-                          disabled={isSyncing}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                          title="Sync to server"
-                        >
-                          <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                      <div className="p-6 flex-1">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="p-2 bg-violet-50 rounded-lg text-violet-600 group-hover:bg-violet-100 transition-colors">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M4 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {room.status === "local-only" ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                Local
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Synced
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate" title={room.title}>
+                          {room.title}
+                        </h3>
+                        
+                        <div className="text-sm text-gray-500 flex items-center gap-1.5">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                           </svg>
-                        </button>
-                      )}
-                      
-                      <button
-                        onClick={() => handleEditRoom(room.id)}
-                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
-                        title="Rename"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                        </svg>
-                      </button>
-                      
-                      <button
-                        onClick={() => handleDeleteRoom(room.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                        title="Delete"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                      </button>
+                          {lastSynced ? `Synced ${lastSynced}` : "Not synced yet"}
+                        </div>
+                      </div>
+
+                      <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                        <Link
+                          href={`/room/${room.id}`}
+                          className="text-sm font-medium text-violet-600 hover:text-violet-700 transition-colors"
+                        >
+                          Open Room &rarr;
+                        </Link>
+                        
+                        <div className="flex items-center gap-1">
+                          {room.status === "local-only" && (
+                            <button
+                              onClick={() => handleSyncRoom(room.id)}
+                              disabled={isSyncing}
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              title="Sync to server"
+                            >
+                              <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                              </svg>
+                            </button>
+                          )}
+                          
+                          <button
+                            onClick={() => handleEditRoom(room.id)}
+                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                            title="Rename"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                          </button>
+                          
+                          <button
+                            onClick={() => handleDeleteRoom(room.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                            title="Delete"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Last Synced
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {paginatedRooms.map((room) => {
+                      const isSyncing = syncingRooms.has(room.id);
+                      const lastSynced = room.lastSyncedAt
+                        ? new Date(room.lastSyncedAt).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "numeric",
+                          })
+                        : null;
+
+                      return (
+                        <tr key={room.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10 bg-violet-100 rounded-lg flex items-center justify-center text-violet-600">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M4 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </div>
+                              <div className="ml-4">
+                                <Link href={`/room/${room.id}`} className="text-sm font-medium text-gray-900 hover:text-violet-600">
+                                  {room.title}
+                                </Link>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {room.status === "local-only" ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                Local
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Synced
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {lastSynced || "Not synced yet"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end gap-2">
+                              <Link
+                                href={`/room/${room.id}`}
+                                className="text-violet-600 hover:text-violet-900 mr-2"
+                              >
+                                Open
+                              </Link>
+                              
+                              {room.status === "local-only" && (
+                                <button
+                                  onClick={() => handleSyncRoom(room.id)}
+                                  disabled={isSyncing}
+                                  className="text-blue-600 hover:text-blue-900"
+                                  title="Sync to server"
+                                >
+                                  <svg className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                  </svg>
+                                </button>
+                              )}
+                              
+                              <button
+                                onClick={() => handleEditRoom(room.id)}
+                                className="text-gray-400 hover:text-gray-600"
+                                title="Rename"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                              </button>
+                              
+                              <button
+                                onClick={() => handleDeleteRoom(room.id)}
+                                className="text-gray-400 hover:text-red-600"
+                                title="Delete"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => handlePageChange(page)}
+                      className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === page
+                          ? 'bg-violet-600 text-white shadow-sm'
+                          : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>
