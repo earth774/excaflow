@@ -63,8 +63,8 @@ export default function LoginPage() {
           },
           {
             image: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2670&auto=format&fit=crop",
-            title: "Collaborate in real-time.",
-            description: "Work together with your team seamlessly, no matter where you are. Experience the power of true collaboration."
+            title: "Design without limits.",
+            description: "Create stunning diagrams effortlessly. Experience the power of true creativity."
           },
           {
             image: "https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?q=80&w=2574&auto=format&fit=crop",

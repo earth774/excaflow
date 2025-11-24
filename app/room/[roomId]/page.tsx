@@ -22,16 +22,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   return {
     title: room.title,
-    description: room.description || "Join this Excalidraw room to collaborate!",
+    description: room.description || "View this Excalidraw room!",
     openGraph: {
       title: room.title,
-      description: room.description || "Join this Excalidraw room to collaborate!",
+      description: room.description || "View this Excalidraw room!",
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
       title: room.title,
-      description: room.description || "Join this Excalidraw room to collaborate!",
+      description: room.description || "View this Excalidraw room!",
     },
   };
 }

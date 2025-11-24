@@ -487,7 +487,7 @@ export default function Home() {
         <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Your Creative Space</h1>
-            <p className="mt-2 text-gray-600">Manage your drawings and collaborate with others.</p>
+            <p className="mt-2 text-gray-600">Manage your drawings and share them with the world.</p>
           </div>
           <button
             onClick={() => {
