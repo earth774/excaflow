@@ -197,6 +197,27 @@ const Excalidraw = dynamic(
   }
 );
 
+import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
+
+// ... existing imports
+
+const LockIcon = ({ className }: { className?: string }) => (
+  <svg 
+    className={className} 
+    fill="none" 
+    stroke="currentColor" 
+    viewBox="0 0 24 24" 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      strokeWidth={2} 
+      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" 
+    />
+  </svg>
+);
+
 export default function RoomPage() {
   const params = useParams();
   const roomId = params.roomId as string;
@@ -227,6 +248,7 @@ export default function RoomPage() {
     serverUpdatedAt: string;
   } | null>(null);
   const [isOwner, setIsOwner] = useState<boolean>(false);
+  const [isSubscriptionActive, setIsSubscriptionActive] = useState<boolean>(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiPrompt, setAIPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -237,6 +259,41 @@ export default function RoomPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
+
+  const handleCheckout = async () => {
+    try {
+      const response = await authenticatedFetch("/api/checkout", {
+        method: "POST",
+        body: JSON.stringify({ priceId: STRIPE_PRICE_ID }),
+      });
+
+      const { url, error } = await response.json();
+
+      if (error) {
+        alert("Checkout failed: " + error);
+        return;
+      }
+
+      if (url) {
+        window.location.href = url;
+      } else {
+        alert("Failed to start checkout.");
+      }
+    } catch (err) {
+      console.error("Checkout error:", err);
+      alert("An unexpected error occurred.");
+    }
+  };
+
+  const handleLockedFeature = (action: () => void) => {
+    if (!isSubscriptionActive) {
+      if (confirm("Your subscription has expired. Please upgrade to continue using this feature.")) {
+        handleCheckout();
+      }
+      return;
+    }
+    action();
+  };
   
   // Track current initialScene files to detect changes without causing re-renders
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -377,6 +434,7 @@ export default function RoomPage() {
           
           // Set ownership status
           setIsOwner(dbRoom.isOwner === true);
+          setIsSubscriptionActive(dbRoom.isSubscriptionActive === true);
           
           // Check localStorage for draft (only if owner)
           // Await the async loadLocalRoom call
@@ -1373,15 +1431,15 @@ export default function RoomPage() {
             <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Share</div>
             <button
               onClick={() => {
-                navigator.clipboard.writeText(window.location.href)
-                  .then(() => alert("Link copied to clipboard"))
-                  .catch(() => alert("Failed to copy link"));
+                  navigator.clipboard.writeText(window.location.href)
+                    .then(() => alert("Link copied to clipboard"))
+                    .catch(() => alert("Failed to copy link"));
               }}
               className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
             >
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
               <span>Copy Link</span>
             </button>
           </div>
@@ -1392,35 +1450,56 @@ export default function RoomPage() {
               <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Actions</div>
               <div className="space-y-2">
                 <button
-                  onClick={handlePush}
+                  onClick={() => handleLockedFeature(handlePush)}
                   disabled={isSyncing}
-                  className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
+                  className={`w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors ${
+                    !isSubscriptionActive ? "opacity-60 cursor-not-allowed" : ""
+                  }`}
                 >
-                  <div className={`w-2 h-2 rounded-full ${isSyncing ? "bg-gray-400 animate-pulse" : "bg-blue-500"}`} />
+                  {!isSubscriptionActive ? (
+                    <LockIcon className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <div className={`w-2 h-2 rounded-full ${isSyncing ? "bg-gray-400 animate-pulse" : "bg-blue-500"}`} />
+                  )}
                   <span>{isSyncing ? "Saving..." : "Save to Server (Push)"}</span>
+                  {!isSubscriptionActive && <span className="ml-auto text-xs text-amber-500 font-medium">PRO</span>}
                 </button>
                 
                 <button
-                  onClick={handleCheckSync}
+                  onClick={() => handleLockedFeature(handleCheckSync)}
                   disabled={isSyncing}
-                  className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
+                  className={`w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors ${
+                    !isSubscriptionActive ? "opacity-60 cursor-not-allowed" : ""
+                  }`}
                 >
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
+                  {!isSubscriptionActive ? (
+                    <LockIcon className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
                   <span>Check Sync Status</span>
+                  {!isSubscriptionActive && <span className="ml-auto text-xs text-amber-500 font-medium">PRO</span>}
                 </button>
 
                 {syncStatus.dbExists && (
                   <button
-                    onClick={handlePull}
+                    onClick={() => handleLockedFeature(handlePull)}
                     disabled={isSyncing}
-                    className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
+                    className={`w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors ${
+                      !isSubscriptionActive ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
                   >
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                    </svg>
+                    {!isSubscriptionActive ? (
+                      <LockIcon className="w-4 h-4 text-gray-400" />
+                    ) : (
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                      </svg>
+                    )}
                     <span>Pull from Server</span>
+                    {!isSubscriptionActive && <span className="ml-auto text-xs text-amber-500 font-medium">PRO</span>}
                   </button>
                 )}
               </div>
@@ -1456,13 +1535,20 @@ export default function RoomPage() {
         {isOwner && (
           <div className="p-4 border-t border-gray-100 dark:border-gray-700">
             <button
-              onClick={() => setShowAIModal(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-medium rounded-xl transition-all shadow-lg shadow-violet-500/20"
+              onClick={() => handleLockedFeature(() => setShowAIModal(true))}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-medium rounded-xl transition-all shadow-lg shadow-violet-500/20 ${
+                !isSubscriptionActive ? "opacity-60 cursor-not-allowed grayscale" : ""
+              }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+              {!isSubscriptionActive ? (
+                <LockIcon className="w-4 h-4" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              )}
               <span>AI Generate</span>
+              {!isSubscriptionActive && <span className="ml-1 text-xs bg-white/20 px-1.5 py-0.5 rounded text-white">PRO</span>}
             </button>
           </div>
         )}

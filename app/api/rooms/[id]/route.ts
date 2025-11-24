@@ -47,10 +47,24 @@ export async function GET(
 
     // Include ownership info in response (false if not logged in)
     const isOwner = userId ? room.ownerId === userId : false;
+
+    // Check subscription status
+    let isSubscriptionActive = false;
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { stripeCurrentPeriodEnd: true },
+      });
+
+      if (user?.stripeCurrentPeriodEnd) {
+        isSubscriptionActive = user.stripeCurrentPeriodEnd > new Date();
+      }
+    }
     
     return NextResponse.json({
       ...room,
       isOwner, // Add ownership flag
+      isSubscriptionActive,
     });
   } catch (error) {
     console.error("Error fetching room:", error);
