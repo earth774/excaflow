@@ -10,8 +10,9 @@ import Stripe from 'stripe';
  * Otherwise, default to +1 month from now
  */
 function getCurrentPeriodEnd(subscription: Stripe.Subscription | null): Date {
-  if (subscription?.current_period_end) {
-    return new Date(subscription.current_period_end * 1000);
+  const sub = subscription as any;
+  if (sub?.current_period_end) {
+    return new Date(sub.current_period_end * 1000);
   }
   // Default to +1 month from now if not provided
   const oneMonthFromNow = new Date();
