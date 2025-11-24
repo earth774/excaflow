@@ -118,8 +118,15 @@ const sanitizeFiles = (files: any = {}): any => {
           console.warn(`File ${fileId} has invalid dataURL format, skipping file`);
         }
       } else {
-        // No dataURL - skip this file (Excalidraw requires dataURL)
-        console.warn(`File ${fileId} has no dataURL, skipping file`);
+        // No dataURL - check if we have supabaseUrl (from optimized local storage)
+        if (sanitizedFile.supabaseUrl && typeof sanitizedFile.supabaseUrl === "string") {
+          // Use supabaseUrl as dataURL so it passes validation and is saved to DB
+          sanitizedFile.dataURL = sanitizedFile.supabaseUrl;
+          hasValidDataURL = true;
+        } else {
+          // No dataURL and no supabaseUrl - skip this file
+          console.warn(`File ${fileId} has no dataURL, skipping file`);
+        }
       }
 
       // Only include files with valid dataURLs
@@ -365,8 +372,11 @@ export default function RoomClient() {
               }
             } catch (error) {
               console.error(`[prepareInitialScene] Error converting URL to base64 for ${fileId}:`, error);
-              // Keep file as-is on error
-              filesWithBase64[fileId] = fileData;
+              // Fallback: Use the URL as dataURL so Excalidraw can try to load it directly
+              filesWithBase64[fileId] = {
+                ...fileData,
+                dataURL: urlToFetch,
+              };
               continue;
             }
           }
@@ -399,11 +409,12 @@ export default function RoomClient() {
       const fileData = file as any;
       if (
         fileData &&
-        fileData.dataURL &&
+        (fileData.supabaseUrl || 
+        (fileData.dataURL &&
         typeof fileData.dataURL === "string" &&
         (fileData.dataURL.startsWith("http://") ||
           fileData.dataURL.startsWith("https://") ||
-          fileData.dataURL.startsWith("blob:"))
+          fileData.dataURL.startsWith("blob:"))))
       ) {
         // File has a URL (from Supabase), mark as uploaded
         uploadedIds.add(fileId);
@@ -676,47 +687,17 @@ export default function RoomClient() {
 
         const { url } = await response.json();
 
-        // Update local room scene with Supabase URL converted to base64
+        // Update local room scene with Supabase URL
+        // We don't need to fetch the image back, we already have the base64 dataURL
         const currentRoom = await loadLocalRoom(roomId);
         if (currentRoom) {
-          
-          // Convert Supabase URL to base64 data URL for Excalidraw to display immediately
-          let base64DataURL: string | null = null;
-          try {
-            const imageResponse = await fetch(url);
-            if (imageResponse.ok) {
-              const blob = await imageResponse.blob();
-              const reader = new FileReader();
-              base64DataURL = await new Promise<string>((resolve, reject) => {
-                reader.onloadend = () => {
-                  if (typeof reader.result === "string") {
-                    resolve(reader.result);
-                  } else {
-                    reject(new Error("Failed to convert blob to base64"));
-                  }
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-            } else {
-              throw new Error(`Failed to fetch image: ${imageResponse.status}`);
-            }
-          } catch (error) {
-            console.error(`[uploadFileToSupabase] Error converting URL to base64 for ${fileId}:`, error);
-            throw error; // Re-throw to be caught by outer catch block
-          }
-
-          if (!base64DataURL) {
-            throw new Error("Failed to convert URL to base64");
-          }
-          
           const updatedFiles = {
             ...currentRoom.scene.files,
             [fileId]: {
               ...currentRoom.scene.files?.[fileId],
-              // Store base64 data URL for Excalidraw to display immediately
-              dataURL: base64DataURL,
-              // Store Supabase URL separately for persistence (will be used when saving to localStorage)
+              // Keep the base64 dataURL for immediate display
+              dataURL: file.dataURL,
+              // Store Supabase URL for persistence
               supabaseUrl: url,
             },
           };
