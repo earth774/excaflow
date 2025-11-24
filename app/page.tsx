@@ -1,14 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import Image from "next/image";
+import { useState, useEffect } from "react";
 
 import { supabase } from "@/lib/supabaseClient";
 import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
+import type { User } from "@supabase/supabase-js";
 
 export default function LandingPage() {
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleCheckout = async (priceId: string) => {
     setLoading(true);
@@ -84,18 +103,21 @@ export default function LandingPage() {
               </span>
             </Link>
             <div className="flex items-center gap-4">
-              <Link
-                href="/login"
-                className="text-gray-400 hover:text-white transition-colors font-medium px-4 py-2"
-              >
-                Sign in
-              </Link>
-              <Link
-                href="/signup"
-                className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-xl transition-all transform hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-500/30"
-              >
-                Get Started
-              </Link>
+              {user ? (
+                <Link
+                  href="/dashboard"
+                  className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-xl transition-all transform hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-500/30"
+                >
+                  Dashboard
+                </Link>
+              ) : (
+                <Link
+                  href="/login"
+                  className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-xl transition-all transform hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-500/30"
+                >
+                  Sign in
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -152,30 +174,25 @@ export default function LandingPage() {
             <div className="relative max-w-5xl mx-auto">
               <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5 backdrop-blur-sm shadow-2xl">
                 <div className="absolute inset-0 bg-gradient-to-br from-violet-600/10 to-fuchsia-600/10"></div>
-                <div className="relative aspect-video flex items-center justify-center p-12">
-                  <div className="text-center space-y-6">
-                    <div className="relative inline-block">
-                      <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-2xl blur-xl opacity-50"></div>
-                      <div className="relative w-24 h-24 bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-2xl flex items-center justify-center">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 text-lg font-medium">Interactive Canvas</p>
-                      <p className="text-gray-500 text-sm">Your diagrams come to life here</p>
-                    </div>
-                  </div>
+                <div className="relative aspect-video flex items-center justify-center">
+                  <Image
+                    src="/images/hero-preview.png"
+                    alt="Excaflow Interface Preview"
+                    fill
+                    className="object-cover"
+                    priority
+                  />
+                  {/* Overlay Gradient for better text integration if needed, or just aesthetic */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-transparent to-transparent opacity-20"></div>
                 </div>
               </div>
               {/* Floating Elements */}
-              <div className="absolute -top-4 -right-4 w-20 h-20 bg-violet-500/20 rounded-2xl backdrop-blur-sm border border-violet-500/30 flex items-center justify-center">
+              <div className="absolute -top-4 -right-4 w-20 h-20 bg-violet-500/20 rounded-2xl backdrop-blur-sm border border-violet-500/30 flex items-center justify-center animate-bounce duration-[3000ms]">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-400"/>
                 </svg>
               </div>
-              <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-fuchsia-500/20 rounded-2xl backdrop-blur-sm border border-fuchsia-500/30 flex items-center justify-center">
+              <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-fuchsia-500/20 rounded-2xl backdrop-blur-sm border border-fuchsia-500/30 flex items-center justify-center animate-bounce duration-[4000ms]">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-fuchsia-400"/>
                 </svg>
