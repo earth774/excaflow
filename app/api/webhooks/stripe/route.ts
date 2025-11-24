@@ -126,7 +126,7 @@ export async function POST(req: Request) {
   if (event.type === 'invoice.payment_succeeded') {
     try {
       const invoice = event.data.object as Stripe.Invoice;
-      const subscriptionId = invoice.subscription as string;
+      const subscriptionId = (invoice as any).subscription as string;
       
       if (!subscriptionId) {
         console.error('Webhook Error: No subscription ID in invoice', invoice.id);
