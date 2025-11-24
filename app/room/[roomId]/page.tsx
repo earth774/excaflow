@@ -848,8 +848,15 @@ export default function RoomPage() {
               !uploadedFileIdsRef.current.has(fileId) &&
               !uploadingFileIdsRef.current.has(fileId)
             ) {
-              // Upload in background
-              uploadFileToSupabase(fileId, fileData, roomId);
+              // Only upload to Supabase if subscription is active (Pro feature)
+              if (isSubscriptionActive) {
+                // Upload in background
+                uploadFileToSupabase(fileId, fileData, roomId);
+              } else {
+                // For free users, we just keep it in localStorage (which happens automatically via saveLocalRoom)
+                // We mark it as "uploaded" to prevent repeated checks, but it's really just "processed"
+                uploadedFileIdsRef.current.add(fileId);
+              }
             }
           }
         }
@@ -885,7 +892,7 @@ export default function RoomPage() {
         }
       }, 500); // 500ms debounce
     },
-    [localRoom, roomId, syncStatus.status, syncStatus.dbExists, isOwner, uploadFileToSupabase, excalidrawAPI]
+    [localRoom, roomId, syncStatus.status, syncStatus.dbExists, isOwner, uploadFileToSupabase, excalidrawAPI, isSubscriptionActive]
   );
 
   // Sync: Push local to server
