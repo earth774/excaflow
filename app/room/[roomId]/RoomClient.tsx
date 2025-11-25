@@ -198,7 +198,7 @@ const Excalidraw = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
       </div>
     ),
   }
@@ -1349,65 +1349,68 @@ export default function RoomClient() {
 
   if (!isClient || !localRoom || !initialScene) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-[#faf9f6]">
         <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
-          <div className="text-gray-500 dark:text-gray-400">กำลังโหลดห้องวาดภาพ...</div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-stone-900"></div>
+          <div className="text-stone-500 font-medium">Loading your space...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#faf9f6]">
       
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? "w-64" : "w-0"} flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 overflow-hidden flex flex-col relative z-20`}>
+      <div className={`${sidebarOpen ? "w-72" : "w-0"} flex-shrink-0 bg-[#faf9f6] border-r border-stone-200 transition-all duration-300 overflow-hidden flex flex-col relative z-20`}>
         
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <Link href="/dashboard" className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-500 dark:text-gray-400">
+        <div className="p-6 border-b border-stone-200/50 flex items-center justify-between">
+          <div className="flex items-center gap-3 overflow-hidden flex-1">
+            <Link 
+              href="/dashboard"
+              className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-600 transition-colors shrink-0"
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
             </Link>
-            <h1 className="font-bold text-gray-800 dark:text-white truncate">
+            <h1 className="font-bold text-lg text-stone-900 truncate">
               {localRoom.title}
             </h1>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-600 transition-colors shrink-0">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
         </div>
 
         {/* Sidebar Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
           {/* Room Info */}
           <div>
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Room Info</div>
-            <div className="space-y-3">
+            <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-4">Room Info</div>
+            <div className="space-y-4">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Status</span>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                <span className="text-stone-500 font-medium">Status</span>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                   syncStatus.status === "synced" && syncStatus.isInSync !== false
-                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                    ? "bg-green-50 text-green-700 border border-green-100"
+                    : "bg-amber-50 text-amber-700 border border-amber-100"
                 }`}>
                   {syncStatus.status === "synced" && syncStatus.isInSync !== false ? "Synced" : "Unsaved"}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Last Updated</span>
-                <span className="text-gray-700 dark:text-gray-300 text-xs">
+                <span className="text-stone-500 font-medium">Last Updated</span>
+                <span className="text-stone-900 font-bold text-xs">
                   {new Date(localRoom.updatedAt).toLocaleTimeString("th-TH", { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
               {!isOwner && (
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-xs p-2 rounded-lg">
+                <div className="bg-yellow-50 text-yellow-800 border border-yellow-100 text-xs p-3 rounded-xl font-medium">
                   You are in read-only mode
                 </div>
               )}
@@ -1416,16 +1419,16 @@ export default function RoomClient() {
 
           {/* Share */}
           <div>
-            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Share</div>
+            <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-4">Share</div>
             <button
               onClick={() => {
                   navigator.clipboard.writeText(window.location.href)
                     .then(() => alert("Link copied to clipboard"))
                     .catch(() => alert("Failed to copy link"));
               }}
-              className="w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors"
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-stone-200 hover:border-yellow-400 hover:text-yellow-700 hover:bg-yellow-50 rounded-xl text-sm text-stone-600 font-bold transition-all shadow-sm"
             >
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
               <span>Copy Link</span>
@@ -1435,59 +1438,59 @@ export default function RoomClient() {
           {/* Actions */}
           {isOwner && (
             <div>
-              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Actions</div>
-              <div className="space-y-2">
+              <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-4">Actions</div>
+              <div className="space-y-3">
                 <button
                   onClick={() => handleLockedFeature(handlePush)}
                   disabled={isSyncing}
-                  className={`w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 hover:border-stone-300 hover:bg-stone-50 rounded-xl text-sm text-stone-600 font-bold transition-all shadow-sm ${
                     !isSubscriptionActive ? "opacity-60 cursor-not-allowed" : ""
                   }`}
                 >
                   {!isSubscriptionActive ? (
-                    <LockIcon className="w-4 h-4 text-gray-400" />
+                    <LockIcon className="w-4 h-4 text-stone-400" />
                   ) : (
-                    <div className={`w-2 h-2 rounded-full ${isSyncing ? "bg-gray-400 animate-pulse" : "bg-blue-500"}`} />
+                    <div className={`w-2 h-2 rounded-full ${isSyncing ? "bg-stone-400 animate-pulse" : "bg-blue-500"}`} />
                   )}
-                  <span>{isSyncing ? "Saving..." : "Save to Server (Push)"}</span>
-                  {!isSubscriptionActive && <span className="ml-auto text-xs text-amber-500 font-medium">PRO</span>}
+                  <span>{isSyncing ? "Saving..." : "Save to Server"}</span>
+                  {!isSubscriptionActive && <span className="ml-auto text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
                 </button>
                 
                 <button
                   onClick={() => handleLockedFeature(handleCheckSync)}
                   disabled={isSyncing}
-                  className={`w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 hover:border-stone-300 hover:bg-stone-50 rounded-xl text-sm text-stone-600 font-bold transition-all shadow-sm ${
                     !isSubscriptionActive ? "opacity-60 cursor-not-allowed" : ""
                   }`}
                 >
                   {!isSubscriptionActive ? (
-                    <LockIcon className="w-4 h-4 text-gray-400" />
+                    <LockIcon className="w-4 h-4 text-stone-400" />
                   ) : (
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                   )}
                   <span>Check Sync Status</span>
-                  {!isSubscriptionActive && <span className="ml-auto text-xs text-amber-500 font-medium">PRO</span>}
+                  {!isSubscriptionActive && <span className="ml-auto text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
                 </button>
 
                 {syncStatus.dbExists && (
                   <button
                     onClick={() => handleLockedFeature(handlePull)}
                     disabled={isSyncing}
-                    className={`w-full flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm text-gray-700 dark:text-gray-200 transition-colors ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 hover:border-stone-300 hover:bg-stone-50 rounded-xl text-sm text-stone-600 font-bold transition-all shadow-sm ${
                       !isSubscriptionActive ? "opacity-60 cursor-not-allowed" : ""
                     }`}
                   >
                     {!isSubscriptionActive ? (
-                      <LockIcon className="w-4 h-4 text-gray-400" />
+                      <LockIcon className="w-4 h-4 text-stone-400" />
                     ) : (
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
                       </svg>
                     )}
                     <span>Pull from Server</span>
-                    {!isSubscriptionActive && <span className="ml-auto text-xs text-amber-500 font-medium">PRO</span>}
+                    {!isSubscriptionActive && <span className="ml-auto text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
                   </button>
                 )}
               </div>
@@ -1497,16 +1500,16 @@ export default function RoomClient() {
           {/* File Upload Status */}
           {isOwner && (uploadingFiles.size > 0 || uploadErrors.size > 0) && (
             <div>
-              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Uploads</div>
-              <div className="space-y-2">
+              <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-4">Uploads</div>
+              <div className="space-y-3">
                 {uploadingFiles.size > 0 && (
-                  <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                  <div className="text-xs text-blue-600 flex items-center gap-2 font-medium bg-blue-50 border border-blue-100 p-3 rounded-xl">
                     <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
                     Uploading {uploadingFiles.size} file{uploadingFiles.size > 1 ? 's' : ''}...
                   </div>
                 )}
                 {Array.from(uploadErrors.entries()).map(([fileId, error]) => (
-                  <div key={fileId} className="text-xs text-red-600 dark:text-red-400 flex items-center gap-2 truncate" title={error}>
+                  <div key={fileId} className="text-xs text-red-600 flex items-center gap-2 truncate font-medium bg-red-50 border border-red-100 p-3 rounded-xl" title={error}>
                     <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -1521,10 +1524,10 @@ export default function RoomClient() {
 
         {/* Sidebar Footer */}
         {isOwner && (
-          <div className="p-4 border-t border-gray-100 dark:border-gray-700">
+          <div className="p-6 border-t border-stone-200/50 bg-[#faf9f6]">
             <button
               onClick={() => handleLockedFeature(() => setShowAIModal(true))}
-              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white font-medium rounded-xl transition-all shadow-lg shadow-violet-500/20 ${
+              className={`w-full flex items-center justify-center gap-2 px-4 py-3 bg-stone-900 hover:bg-stone-800 text-white font-bold rounded-full transition-all shadow-lg shadow-stone-900/20 transform hover:-translate-y-0.5 ${
                 !isSubscriptionActive ? "opacity-60 cursor-not-allowed grayscale" : ""
               }`}
             >
@@ -1543,22 +1546,24 @@ export default function RoomClient() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 relative h-full overflow-hidden">
+      <div className="flex-1 relative h-full overflow-hidden p-4">
         
-        {/* Toggle Sidebar Button (Visible when sidebar closed) */}
+        {/* Floating Top Bar (Controls) */}
         {!sidebarOpen && (
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="absolute top-4 left-4 z-10 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+          <div className="absolute top-6 left-6 z-10">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-3 bg-white border border-stone-200 rounded-xl shadow-sm hover:bg-stone-50 transition-colors text-stone-600 group"
+            >
+              <svg className="w-5 h-5 group-hover:text-stone-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
         )}
 
-        {/* Excalidraw Canvas */}
-        <div className="absolute inset-0 z-0">
+        {/* Excalidraw Canvas Container */}
+        <div className="relative w-full h-full rounded-2xl border border-stone-200 shadow-sm bg-white overflow-hidden">
           {isClient && initialScene && (
             <Excalidraw
               key={`excalidraw-${roomId}`}
@@ -1566,13 +1571,6 @@ export default function RoomClient() {
               onChange={handleChange}
               initialData={initialScene}
               viewModeEnabled={!isOwner}
-              UIOptions={{
-                canvasActions: {
-                  saveToActiveFile: false,
-                  loadScene: false,
-                  ...(isOwner ? {} : { export: false }),
-                },
-              }}
             />
           )}
         </div>
@@ -1580,18 +1578,18 @@ export default function RoomClient() {
 
       {/* Conflict Dialog */}
       {showConflictDialog && conflictInfo && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-md w-full border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full border border-stone-100 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-3 mb-4 text-amber-500">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+              <h3 className="text-lg font-bold text-stone-900">
                 Conflict Detected
               </h3>
             </div>
             
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+            <p className="text-sm text-stone-600 font-medium mb-6">
               Your local data doesn't match the server data. Which version would you like to use?
             </p>
 
@@ -1599,29 +1597,29 @@ export default function RoomClient() {
               <button
                 onClick={handlePush}
                 disabled={isSyncing}
-                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl transition-all group"
+                className="w-full flex items-center justify-between px-4 py-3 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl transition-all group"
               >
                 <div className="text-left">
-                  <div className="font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Use Local Data</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className="font-bold text-stone-900 group-hover:text-blue-600 transition-colors">Use Local Data</div>
+                  <div className="text-xs text-stone-500 font-medium">
                     Updated: {new Date(conflictInfo.localUpdatedAt).toLocaleString("en-US")}
                   </div>
                 </div>
-                <div className="w-4 h-4 rounded-full border-2 border-gray-300 group-hover:border-blue-500" />
+                <div className="w-4 h-4 rounded-full border-2 border-stone-300 group-hover:border-blue-500" />
               </button>
 
               <button
                 onClick={handlePull}
                 disabled={isSyncing}
-                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl transition-all group"
+                className="w-full flex items-center justify-between px-4 py-3 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl transition-all group"
               >
                 <div className="text-left">
-                  <div className="font-semibold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">Use Server Data</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className="font-bold text-stone-900 group-hover:text-green-600 transition-colors">Use Server Data</div>
+                  <div className="text-xs text-stone-500 font-medium">
                     Updated: {new Date(conflictInfo.serverUpdatedAt).toLocaleString("en-US")}
                   </div>
                 </div>
-                <div className="w-4 h-4 rounded-full border-2 border-gray-300 group-hover:border-green-500" />
+                <div className="w-4 h-4 rounded-full border-2 border-stone-300 group-hover:border-green-500" />
               </button>
             </div>
 
@@ -1630,7 +1628,7 @@ export default function RoomClient() {
                 setShowConflictDialog(false);
                 setConflictInfo(null);
               }}
-              className="w-full mt-6 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+              className="w-full mt-6 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 transition-colors"
             >
               Cancel and Decide Later
             </button>
@@ -1640,10 +1638,10 @@ export default function RoomClient() {
 
       {/* AI Modal */}
       {showAIModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-stone-100 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 bg-clip-text text-transparent">
+              <h3 className="text-xl font-bold text-stone-900">
                 AI Generate Diagram
               </h3>
               <button 
@@ -1652,30 +1650,30 @@ export default function RoomClient() {
                   setAIPrompt("");
                   setAIError(null);
                 }}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+                className="p-1 hover:bg-stone-100 rounded-full transition-colors"
               >
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-bold text-stone-700 mb-2">
                 Describe the diagram you want
               </label>
               <textarea
                 value={aiPrompt}
                 onChange={(e) => setAIPrompt(e.target.value)}
                 placeholder="e.g., Create a flowchart for Login system with 3 steps: Start, Login Form, Success..."
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 dark:text-white text-sm transition-all resize-none"
+                className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500 text-stone-900 text-sm transition-all resize-none placeholder-stone-400"
                 rows={4}
                 disabled={isGenerating}
               />
             </div>
 
             {aiError && (
-              <div className="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-2">
+              <div className="mb-6 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm flex items-center gap-2 font-medium">
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -1687,7 +1685,7 @@ export default function RoomClient() {
               <button
                 onClick={handleAIGenerate}
                 disabled={isGenerating || !aiPrompt.trim()}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-50 text-white font-medium rounded-xl transition-all shadow-lg shadow-violet-500/20 flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-3 bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg shadow-stone-900/20 flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
               >
                 {isGenerating ? (
                   <>

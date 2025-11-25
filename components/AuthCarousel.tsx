@@ -42,7 +42,7 @@ export default function AuthCarousel({ slides, interval = 5000 }: AuthCarouselPr
           }`}
         >
           {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-br from-violet-600/30 via-transparent to-fuchsia-600/30 z-10" />
+          <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/30 via-transparent to-amber-600/30 z-10" />
           
           {/* Background Image */}
           <div 

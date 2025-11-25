@@ -72,22 +72,22 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="min-h-screen flex bg-[#faf9f6]">
       {/* Left Side - Hero/Branding */}
       <AuthCarousel 
         slides={[
           {
-            image: "https://images.unsplash.com/photo-1635776062127-d379bfcba9f8?q=80&w=2532&auto=format&fit=crop",
+            image: "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2560&auto=format&fit=crop",
             title: "Join our community today.",
             description: "Create an account to access exclusive features and start building your next big idea. It's free and takes less than a minute."
           },
           {
-            image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=2670&auto=format&fit=crop",
+            image: "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?q=80&w=2560&auto=format&fit=crop",
             title: "Built for creators.",
             description: "Designed with creators in mind. Get access to powerful tools that help bring your ideas to life faster than ever before."
           },
           {
-            image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=2574&auto=format&fit=crop",
+            image: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2560&auto=format&fit=crop",
             title: "Join thousands of users.",
             description: "Be part of a growing community of innovators and creators. Start your journey today and unlock your full potential."
           }
@@ -98,16 +98,16 @@ export default function SignupPage() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center lg:text-left">
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+            <h1 className="text-3xl font-bold tracking-tight text-stone-900">
               Create an account
             </h1>
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-stone-600 font-medium">
               Enter your details to get started.
             </p>
           </div>
 
           {success ? (
-            <div className="rounded-lg bg-green-50 p-4 border border-green-100 animate-fade-in">
+            <div className="rounded-2xl bg-green-50 p-4 border border-green-100 animate-fade-in">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
@@ -128,7 +128,7 @@ export default function SignupPage() {
                 <div>
                   <label
                     htmlFor="email"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-bold text-stone-700 mb-1"
                   >
                     Email
                   </label>
@@ -139,7 +139,7 @@ export default function SignupPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="name@company.com"
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 placeholder-gray-400 focus:border-fuchsia-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20 transition-all duration-200"
+                      className="block w-full px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-yellow-500/10 transition-all duration-200"
                       required
                       disabled={loading}
                     />
@@ -149,7 +149,7 @@ export default function SignupPage() {
                 <div>
                   <label
                     htmlFor="password"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-bold text-stone-700 mb-1"
                   >
                     Password
                   </label>
@@ -160,7 +160,7 @@ export default function SignupPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="At least 6 characters"
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 placeholder-gray-400 focus:border-fuchsia-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20 transition-all duration-200"
+                      className="block w-full px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-yellow-500/10 transition-all duration-200"
                       required
                       disabled={loading}
                     />
@@ -170,7 +170,7 @@ export default function SignupPage() {
                 <div>
                   <label
                     htmlFor="confirmPassword"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-bold text-stone-700 mb-1"
                   >
                     Confirm Password
                   </label>
@@ -181,7 +181,7 @@ export default function SignupPage() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Repeat your password"
-                      className="block w-full px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 text-gray-900 placeholder-gray-400 focus:border-fuchsia-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20 transition-all duration-200"
+                      className="block w-full px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-yellow-500/10 transition-all duration-200"
                       required
                       disabled={loading}
                     />
@@ -190,7 +190,7 @@ export default function SignupPage() {
               </div>
 
               {error && (
-                <div className="rounded-lg bg-red-50 p-4 border border-red-100">
+                <div className="rounded-2xl bg-red-50 p-4 border border-red-100">
                   <div className="flex">
                     <div className="flex-shrink-0">
                       <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -210,10 +210,10 @@ export default function SignupPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-fuchsia-600 hover:bg-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-fuchsia-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-0.5"
+                className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-full shadow-lg shadow-yellow-400/20 text-sm font-bold text-stone-900 bg-yellow-400 hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-0.5"
               >
                 {loading ? (
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-stone-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
@@ -223,10 +223,10 @@ export default function SignupPage() {
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200" />
+                  <div className="w-full border-t border-stone-200" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">
+                  <span className="px-2 bg-[#faf9f6] text-stone-500 font-medium">
                     Already have an account?
                   </span>
                 </div>
@@ -235,7 +235,7 @@ export default function SignupPage() {
               <div className="mt-6 text-center">
                 <Link
                   href="/login"
-                  className="font-medium text-fuchsia-600 hover:text-fuchsia-500 transition-colors"
+                  className="font-bold text-stone-900 hover:text-yellow-600 transition-colors"
                 >
                   Sign in
                 </Link>

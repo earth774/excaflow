@@ -73,295 +73,242 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] relative overflow-hidden">
-      {/* Animated Background Pattern */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Grid Pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"></div>
-        
-        {/* Gradient Orbs */}
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-violet-500/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-fuchsia-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
-      </div>
-
+    <div className="min-h-screen bg-[#faf9f6] text-[#18181b] font-sans selection:bg-stone-200">
       {/* Navigation */}
-      <nav className="relative z-50 border-b border-white/5 bg-[#0a0a0f]/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center gap-3 group">
-              <div className="relative">
-                <div className="absolute inset-0 bg-violet-500 rounded-xl blur-md opacity-50 group-hover:opacity-75 transition-opacity"></div>
-                <div className="relative bg-gradient-to-br from-violet-500 to-fuchsia-500 p-2 rounded-xl">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-              </div>
-              <span className="text-xl font-bold text-white">
-                Excaflow
-              </span>
-            </Link>
-            <div className="flex items-center gap-4">
-              {user ? (
-                <Link
-                  href="/dashboard"
-                  className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-xl transition-all transform hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-500/30"
-                >
-                  Dashboard
-                </Link>
-              ) : (
-                <Link
-                  href="/login"
-                  className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-xl transition-all transform hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-500/30"
-                >
-                  Sign in
-                </Link>
-              )}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#faf9f6]/80 backdrop-blur-md border-b border-stone-100">
+        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center text-white group-hover:bg-stone-800 transition-colors">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
+            <span className="text-lg font-medium tracking-tight text-stone-900">
+              Excaflow
+            </span>
+          </Link>
+          <div className="flex items-center gap-6">
+            <Link href="#features" className="text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors hidden sm:block">
+              Features
+            </Link>
+            <Link href="#pricing" className="text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors hidden sm:block">
+              Pricing
+            </Link>
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="px-5 py-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-medium rounded-full transition-all"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="px-5 py-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-medium rounded-full transition-all"
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-20 pb-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-4xl mx-auto">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-violet-500/10 border border-violet-500/20 rounded-full mb-8 backdrop-blur-sm">
-              <div className="relative">
-                <div className="w-2 h-2 bg-violet-400 rounded-full"></div>
-                <div className="absolute inset-0 w-2 h-2 bg-violet-400 rounded-full animate-ping"></div>
+      <section className="pt-32 pb-20 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            <div className="max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-50 rounded-full mb-8 border border-yellow-100">
+                <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                <span className="text-yellow-700 text-xs font-bold tracking-wide uppercase">The Missing Link in AI Development</span>
               </div>
-              <span className="text-violet-300 text-sm font-medium">AI-Powered Diagramming Platform</span>
+              
+              <h1 className="text-5xl sm:text-6xl font-bold leading-[1.1] mb-8 text-stone-900 tracking-tight">
+                Visual-First <br />
+                <span className="text-yellow-500">Specification Platform</span> <br />
+                for the AI Era
+              </h1>
+              
+              <p className="text-lg text-stone-600 mb-10 leading-relaxed max-w-md font-medium">
+                Stop struggling with text prompts. Clarify your architecture visually, generate precise context, and let AI build exactly what you mean.
+              </p>
+              
+              <div className="flex flex-wrap gap-4">
+                <Link
+                  href="/signup"
+                  className="px-8 py-4 bg-yellow-400 hover:bg-yellow-500 text-stone-900 font-bold rounded-full transition-all flex items-center gap-2 shadow-lg shadow-yellow-400/20 transform hover:-translate-y-1"
+                >
+                  Start Specifying
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </Link>
+                <Link
+                  href="#features"
+                  className="px-8 py-4 bg-white border-2 border-stone-100 hover:border-yellow-400 text-stone-900 font-bold rounded-full transition-all"
+                >
+                  See How It Works
+                </Link>
+              </div>
             </div>
-
-            {/* Main Headline */}
-            <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold mb-6 leading-tight">
-              <span className="text-white">Transform Ideas into</span>
-              <br />
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-violet-400 via-fuchsia-400 to-violet-400 bg-[length:200%_auto] animate-gradient">
-                Beautiful Diagrams
-              </span>
-            </h1>
-
-            {/* Subheadline */}
-            <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-              Create stunning diagrams with AI assistance. Sync across devices, 
-              access anywhere, and bring your vision to life effortlessly.
-            </p>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-              <Link
-                href="/signup"
-                className="group relative px-8 py-4 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl transition-all transform hover:-translate-y-1 text-lg shadow-lg shadow-violet-600/30 hover:shadow-violet-600/50"
-              >
-                Start Creating Free
-                <svg className="inline-block ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </Link>
-              <Link
-                href="#features"
-                className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl border border-white/10 hover:border-white/20 transition-all backdrop-blur-sm text-lg"
-              >
-                See Features
-              </Link>
-            </div>
-
-            {/* Demo Preview */}
-            <div className="relative max-w-5xl mx-auto">
-              <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5 backdrop-blur-sm shadow-2xl">
-                <div className="absolute inset-0 bg-gradient-to-br from-violet-600/10 to-fuchsia-600/10"></div>
-                <div className="relative aspect-video flex items-center justify-center">
+            
+            <div className="relative">
+              <div className="relative rounded-2xl overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-stone-100 bg-white">
+                <div className="aspect-[4/3] relative">
                   <Image
-                    src="/images/hero-preview.png"
-                    alt="Excaflow Interface Preview"
+                    src="/images/hero-preview-yellow.png"
+                    alt="Excaflow Interface"
                     fill
                     className="object-cover"
                     priority
                   />
-                  {/* Overlay Gradient for better text integration if needed, or just aesthetic */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-transparent to-transparent opacity-20"></div>
                 </div>
               </div>
-              {/* Floating Elements */}
-              <div className="absolute -top-4 -right-4 w-20 h-20 bg-violet-500/20 rounded-2xl backdrop-blur-sm border border-violet-500/30 flex items-center justify-center animate-bounce duration-[3000ms]">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-400"/>
-                </svg>
-              </div>
-              <div className="absolute -bottom-4 -left-4 w-20 h-20 bg-fuchsia-500/20 rounded-2xl backdrop-blur-sm border border-fuchsia-500/30 flex items-center justify-center animate-bounce duration-[4000ms]">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-fuchsia-400"/>
-                </svg>
-              </div>
+              {/* Decorative elements */}
+              <div className="absolute -z-10 top-10 -right-10 w-full h-full bg-yellow-100 rounded-3xl"></div>
+              <div className="absolute -z-20 -bottom-10 -left-10 w-64 h-64 bg-yellow-50 rounded-full blur-3xl"></div>
             </div>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section id="features" className="relative py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white">
-              Supercharge Your Workflow
+      <section id="features" className="py-24 px-6 bg-white relative overflow-hidden">
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div className="text-center mb-20 max-w-2xl mx-auto">
+            <h2 className="text-3xl font-bold mb-4 text-stone-900">
+              From Mental Model to AI Execution
             </h2>
-            <p className="text-xl text-gray-400">Everything you need to create amazing diagrams</p>
+            <p className="text-stone-500 text-lg font-medium">
+              Bridge the gap between your idea and the code AI writes.
+            </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* Feature 1 */}
-            <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 hover:border-violet-500/50 transition-all">
-              <div className="relative inline-block mb-6">
-                <div className="absolute inset-0 bg-violet-500 blur-xl opacity-0 group-hover:opacity-50 transition-opacity"></div>
-                <div className="relative w-14 h-14 bg-gradient-to-br from-violet-500 to-violet-600 rounded-xl flex items-center justify-center">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <div className="grid md:grid-cols-3 gap-8">
+            {[
+              {
+                title: "Clarify Complex Logic",
+                desc: "Draw your system architecture, data flows, and UI layouts. Clear your mind before writing a single line of code.",
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                   </svg>
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-3">AI-Powered Generation</h3>
-              <p className="text-gray-400 leading-relaxed">
-                Describe your idea and watch as AI creates professional diagrams instantly. No design skills required.
-              </p>
-            </div>
-
-            {/* Feature 2 */}
-            <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 hover:border-fuchsia-500/50 transition-all">
-              <div className="relative inline-block mb-6">
-                <div className="absolute inset-0 bg-fuchsia-500 blur-xl opacity-0 group-hover:opacity-50 transition-opacity"></div>
-                <div className="relative w-14 h-14 bg-gradient-to-br from-fuchsia-500 to-fuchsia-600 rounded-xl flex items-center justify-center">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                )
+              },
+              {
+                title: "Generate AI Prompts",
+                desc: "Export your diagrams as structured context. Give LLMs the visual understanding they lack to generate accurate code.",
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
                   </svg>
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-3">Export Anywhere</h3>
-              <p className="text-gray-400 leading-relaxed">
-                Export your diagrams to PNG, SVG, or PDF. Share your work with anyone, anywhere.
-              </p>
-            </div>
-
-            {/* Feature 3 */}
-            <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 hover:border-blue-500/50 transition-all">
-              <div className="relative inline-block mb-6">
-                <div className="absolute inset-0 bg-blue-500 blur-xl opacity-0 group-hover:opacity-50 transition-opacity"></div>
-                <div className="relative w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                )
+              },
+              {
+                title: "Bridge the Gap",
+                desc: "Iterate on your specs visually. Ensure your AI assistant understands the big picture, not just the syntax.",
+                icon: (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
                   </svg>
+                )
+              }
+            ].map((feature, i) => (
+              <div key={i} className="group p-8 rounded-3xl bg-stone-50 border border-transparent hover:border-yellow-400 hover:bg-white hover:shadow-xl hover:shadow-yellow-400/10 transition-all duration-300">
+                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-yellow-500 mb-6 shadow-sm group-hover:scale-110 group-hover:bg-yellow-400 group-hover:text-stone-900 transition-all duration-300">
+                  {feature.icon}
                 </div>
+                <h3 className="text-xl font-bold text-stone-900 mb-3">{feature.title}</h3>
+                <p className="text-stone-500 leading-relaxed font-medium">
+                  {feature.desc}
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">Cloud Sync</h3>
-              <p className="text-gray-400 leading-relaxed">
-                Access your work anywhere, anytime. Automatic cloud sync keeps everything perfectly up to date.
-              </p>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* Pricing Section */}
-      <section className="relative py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white">
-              Simple Pricing
+      <section id="pricing" className="py-24 px-6 bg-stone-50">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-20">
+            <h2 className="text-3xl font-bold mb-4 text-stone-900">
+              Simple, Transparent Pricing
             </h2>
-            <p className="text-xl text-gray-400">Choose the perfect plan for your needs</p>
+            <p className="text-stone-500 text-lg font-medium">
+              Start for free, upgrade when you need more power.
+            </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {/* Free Plan */}
-            <div
-              onMouseEnter={() => setHoveredPlan("free")}
-              onMouseLeave={() => setHoveredPlan(null)}
-              className={`relative bg-white/5 backdrop-blur-sm border rounded-2xl p-8 transition-all duration-300 ${
-                hoveredPlan === "free"
-                  ? "border-violet-500/50 bg-white/10 -translate-y-1"
-                  : "border-white/10"
-              }`}
-            >
+            <div className="bg-white p-10 rounded-3xl border border-stone-200 shadow-sm flex flex-col hover:border-yellow-400 transition-colors duration-300">
               <div className="mb-8">
-                <h3 className="text-2xl font-bold text-white mb-2">Free</h3>
-                <div className="flex items-baseline mb-4">
-                  <span className="text-5xl font-bold text-white">$0</span>
-                  <span className="text-gray-400 ml-2">/month</span>
+                <h3 className="text-xl font-bold text-stone-900 mb-2">Free</h3>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-bold text-stone-900">$0</span>
+                  <span className="text-stone-500 font-medium">/month</span>
                 </div>
-                <p className="text-gray-400">Perfect for getting started</p>
+                <p className="text-stone-500 mt-4 font-medium">Essential tools for casual creators.</p>
               </div>
-
-              <ul className="space-y-4 mb-8">
+              
+              <ul className="space-y-4 mb-10 flex-1">
                 {[
                   "Up to 5 boards",
-                  "Basic AI diagram generation",
+                  "Basic AI generation",
                   "Cloud sync",
-                  "Access on 2 devices"
-                ].map((feature, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-500/20 flex items-center justify-center mt-0.5">
-                      <svg className="w-3 h-3 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  "2 devices"
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-3 text-stone-600 font-medium">
+                    <div className="w-5 h-5 rounded-full bg-stone-100 flex items-center justify-center">
+                      <svg className="w-3 h-3 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
-                    <span className="text-gray-300">{feature}</span>
+                    {item}
                   </li>
                 ))}
               </ul>
 
               <Link
                 href="/signup"
-                className="block w-full py-3.5 px-6 text-center bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl border border-white/20 hover:border-white/30 transition-all"
+                className="block w-full py-4 px-6 text-center bg-stone-100 hover:bg-stone-200 text-stone-900 font-bold rounded-2xl transition-colors"
               >
-                Get Started Free
+                Get Started
               </Link>
             </div>
 
             {/* Pro Plan */}
-            <div
-              onMouseEnter={() => setHoveredPlan("pro")}
-              onMouseLeave={() => setHoveredPlan(null)}
-              className={`relative backdrop-blur-sm border rounded-2xl p-8 transition-all duration-300 ${
-                hoveredPlan === "pro"
-                  ? "border-violet-500 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 -translate-y-2 shadow-2xl shadow-violet-500/30"
-                  : "border-violet-500/50 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10"
-              }`}
-            >
-              {/* Popular Badge */}
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <div className="px-4 py-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white text-sm font-bold rounded-full shadow-lg">
-                  MOST POPULAR
-                </div>
+            <div className="bg-stone-900 p-10 rounded-3xl text-white shadow-2xl shadow-stone-900/20 flex flex-col relative overflow-hidden transform md:-translate-y-4">
+              <div className="absolute top-0 right-0 bg-yellow-400 px-4 py-1 rounded-bl-2xl text-xs font-bold tracking-wide uppercase text-stone-900">
+                Popular
               </div>
-
+              
               <div className="mb-8">
-                <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
-                <div className="flex items-baseline mb-4">
-                  <span className="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-fuchsia-400">$5</span>
-                  <span className="text-gray-400 ml-2">/month</span>
+                <h3 className="text-xl font-bold text-white mb-2">Pro</h3>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-bold text-yellow-400">$5</span>
+                  <span className="text-stone-400 font-medium">/month</span>
                 </div>
-                <p className="text-gray-400">For power users and teams</p>
+                <p className="text-stone-400 mt-4 font-medium">Unlimited power for professionals.</p>
               </div>
-
-              <ul className="space-y-4 mb-8">
+              
+              <ul className="space-y-4 mb-10 flex-1">
                 {[
                   "Unlimited boards",
                   "Advanced AI features",
                   "Priority cloud sync",
                   "Unlimited devices",
-                  "Export to PNG, SVG, PDF",
+                  "High-res exports",
                   "Priority support"
-                ].map((feature, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-violet-500/30 flex items-center justify-center mt-0.5">
-                      <svg className="w-3 h-3 text-violet-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-3 text-stone-300 font-medium">
+                    <div className="w-5 h-5 rounded-full bg-yellow-400/20 flex items-center justify-center">
+                      <svg className="w-3 h-3 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
-                    <span className="text-white font-medium">{feature}</span>
+                    {item}
                   </li>
                 ))}
               </ul>
@@ -369,9 +316,9 @@ export default function LandingPage() {
               <button
                 onClick={() => handleCheckout(STRIPE_PRICE_ID)}
                 disabled={loading}
-                className="block w-full py-3.5 px-6 text-center bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white font-semibold rounded-xl transition-all transform hover:-translate-y-0.5 shadow-lg shadow-violet-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="block w-full py-4 px-6 text-center bg-yellow-400 hover:bg-yellow-500 text-stone-900 font-bold rounded-2xl transition-all transform hover:-translate-y-0.5 disabled:opacity-70"
               >
-                {loading ? "Processing..." : "Start Pro Trial"}
+                {loading ? "Processing..." : "Upgrade to Pro"}
               </button>
             </div>
           </div>
@@ -379,99 +326,48 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="relative py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="relative bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 border border-violet-500/30 rounded-3xl p-12 backdrop-blur-sm overflow-hidden">
-            {/* Background Pattern */}
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.1)_1px,transparent_1px)] bg-[size:32px_32px] opacity-30"></div>
-            
-            <div className="relative z-10 text-center">
-              <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                Ready to Get Started?
-              </h2>
-              <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-                Join thousands of creators using Excaflow to transform their ideas into reality.
-              </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link
-                  href="/signup"
-                  className="px-8 py-4 bg-white text-violet-600 hover:bg-gray-100 font-bold rounded-xl transition-all transform hover:-translate-y-1 shadow-lg text-lg"
-                >
-                  Start Creating Free
-                </Link>
-                <Link
-                  href="/login"
-                  className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl border border-white/20 hover:border-white/30 transition-all text-lg"
-                >
-                  Sign In
-                </Link>
-              </div>
-            </div>
+      <section className="py-24 px-6 bg-white">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl font-bold text-stone-900 mb-6">
+            Ready to code at the speed of thought?
+          </h2>
+          <p className="text-xl text-stone-500 mb-10 max-w-xl mx-auto font-medium">
+            Join developers who use Visual Specs to master AI coding.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              href="/signup"
+              className="px-10 py-4 bg-stone-900 hover:bg-stone-800 text-white font-bold rounded-full transition-all shadow-xl shadow-stone-900/20 transform hover:-translate-y-1"
+            >
+              Start for Free
+            </Link>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="relative border-t border-white/5 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
-            <div className="md:col-span-2">
-              <Link href="/" className="flex items-center gap-3 mb-4 group">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-violet-500 rounded-xl blur-md opacity-50"></div>
-                  <div className="relative bg-gradient-to-br from-violet-500 to-fuchsia-500 p-2 rounded-xl">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                </div>
-                <span className="text-xl font-bold text-white">
-                  Excaflow
-                </span>
-              </Link>
-              <p className="text-gray-400 max-w-md">
-                AI-powered diagramming platform for modern teams. Create, design, and bring your ideas to life.
-              </p>
+      <footer className="border-t border-stone-200 bg-white py-12 px-6">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-stone-900 rounded flex items-center justify-center text-white">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
-            
-            <div>
-              <h4 className="text-white font-semibold mb-4">Product</h4>
-              <ul className="space-y-2">
-                <li><Link href="#features" className="text-gray-400 hover:text-violet-400 transition-colors">Features</Link></li>
-                <li><Link href="#pricing" className="text-gray-400 hover:text-violet-400 transition-colors">Pricing</Link></li>
-                <li><Link href="/signup" className="text-gray-400 hover:text-violet-400 transition-colors">Sign Up</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="text-white font-semibold mb-4">Company</h4>
-              <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-violet-400 transition-colors">About</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-violet-400 transition-colors">Blog</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-violet-400 transition-colors">Contact</a></li>
-              </ul>
-            </div>
+            <span className="font-medium text-stone-900">Excaflow</span>
           </div>
           
-          <div className="border-t border-white/5 pt-8 text-center text-gray-400">
-            <p>&copy; 2025 Excaflow. All rights reserved.</p>
+          <div className="flex gap-8 text-sm text-stone-500">
+            <Link href="#" className="hover:text-stone-900 transition-colors">Privacy</Link>
+            <Link href="#" className="hover:text-stone-900 transition-colors">Terms</Link>
+            <Link href="#" className="hover:text-stone-900 transition-colors">Contact</Link>
+          </div>
+          
+          <div className="text-sm text-stone-400">
+            &copy; 2025 Excaflow. All rights reserved.
           </div>
         </div>
       </footer>
-
-      <style jsx>{`
-        @keyframes gradient {
-          0%, 100% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-        }
-        .animate-gradient {
-          animation: gradient 3s ease infinite;
-        }
-      `}</style>
     </div>
   );
 }

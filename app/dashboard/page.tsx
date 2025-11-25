@@ -29,7 +29,7 @@ export default function Home() {
   const [isPro, setIsPro] = useState(false);
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
 
@@ -450,10 +450,10 @@ export default function Home() {
 
   if (!isClient || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex items-center justify-center bg-[#faf9f6]">
         <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-violet-600"></div>
-          <div className="text-lg text-gray-500 font-medium">Loading your space...</div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-stone-900"></div>
+          <div className="text-stone-500 font-medium">Loading your space...</div>
         </div>
       </div>
     );
@@ -464,57 +464,57 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#faf9f6] text-[#18181b]">
       {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <nav className="bg-[#faf9f6]/80 backdrop-blur-md border-b border-stone-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white p-2 rounded-lg">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <div className="flex justify-between h-20 items-center">
+            <Link href="/" className="flex items-center gap-2 group">
+              <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center text-white group-hover:bg-stone-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
-              <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-violet-600 to-fuchsia-600">
-                Excaflow Rooms
+              <span className="text-lg font-medium tracking-tight text-stone-900">
+                Excaflow
               </span>
-            </div>
+            </Link>
             <div className="flex items-center gap-4">
               {!isLoadingSubscription && (
                 isPro ? (
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white">
-                      Package Pro
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">
+                      PRO
                     </span>
                     <button
                       onClick={handleManageSubscription}
-                      className="text-xs text-gray-400 hover:text-gray-600 transition-colors underline"
+                      className="text-sm text-stone-500 hover:text-stone-900 transition-colors font-medium"
                     >
                       Manage
                     </button>
                   </div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">
-                      Mode Free
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-stone-100 text-stone-600 border border-stone-200">
+                      FREE
                     </span>
                     <button
                       onClick={handleCheckout}
                       disabled={isCheckingOut}
-                      className="text-sm font-medium text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 px-4 py-2 rounded-lg shadow-sm transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="text-sm font-bold text-stone-900 bg-yellow-400 hover:bg-yellow-500 px-5 py-2 rounded-full shadow-sm transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isCheckingOut ? "Processing..." : "Upgrade to Pro"}
                     </button>
                   </div>
                 )
               )}
-              <div className="hidden md:flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
+              <div className="hidden md:flex items-center gap-2 text-sm text-stone-600 bg-white px-4 py-2 rounded-full border border-stone-200 shadow-sm">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 {user.email}
               </div>
               <button
                 onClick={handleLogout}
-                className="text-gray-500 hover:text-gray-700 font-medium text-sm transition-colors"
+                className="text-stone-500 hover:text-stone-900 font-medium text-sm transition-colors"
               >
                 Sign out
               </button>
@@ -523,12 +523,12 @@ export default function Home() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Hero Section */}
-        <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Your Creative Space</h1>
-            <p className="mt-2 text-gray-600">Manage your drawings and share them with the world.</p>
+            <h1 className="text-4xl font-bold text-stone-900 tracking-tight mb-2">Your Boards</h1>
+            <p className="text-lg text-stone-500 font-medium max-w-lg">Manage your visual specifications and share them with your team.</p>
           </div>
           <button
             onClick={() => {
@@ -537,20 +537,20 @@ export default function Home() {
                 handleCreateRoom(name.trim());
               }
             }}
-            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 transition-all transform hover:-translate-y-0.5"
+            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-bold rounded-full shadow-lg shadow-stone-900/10 text-white bg-stone-900 hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-900 transition-all transform hover:-translate-y-0.5"
           >
             <svg className="-ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
             Create New Room
           </button>
         </div>
 
-        {/* Search and Filter */}
-        <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="relative max-w-lg w-full">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+        {/* Search and Controls */}
+        <div className="mb-10 bg-white border border-stone-200 rounded-2xl p-2 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-2">
+          <div className="relative flex-1 w-full sm:w-auto">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-stone-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
               </svg>
             </div>
@@ -558,56 +558,57 @@ export default function Home() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search rooms..."
-              className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent sm:text-sm shadow-sm transition-all"
+              placeholder="Search your rooms..."
+              className="block w-full pl-11 pr-4 py-2.5 border-none rounded-xl leading-5 bg-transparent placeholder-stone-400 focus:outline-none focus:ring-0 sm:text-sm font-medium text-stone-900"
             />
           </div>
 
-          {/* View Toggle */}
-          <div className="flex items-center bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
+          <div className="flex items-center bg-stone-100 rounded-xl p-1 gap-1">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-md transition-all ${
+              className={`p-2 rounded-lg transition-all flex items-center gap-2 ${
                 viewMode === 'grid'
-                  ? 'bg-violet-100 text-violet-600 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                  ? 'bg-white text-stone-900 shadow-sm'
+                  : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50'
               }`}
               title="Grid View"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
               </svg>
+              <span className="text-xs font-bold hidden sm:inline">Grid</span>
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded-md transition-all ${
+              className={`p-2 rounded-lg transition-all flex items-center gap-2 ${
                 viewMode === 'list'
-                  ? 'bg-violet-100 text-violet-600 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                  ? 'bg-white text-stone-900 shadow-sm'
+                  : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50'
               }`}
               title="List View"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
+              <span className="text-xs font-bold hidden sm:inline">List</span>
             </button>
           </div>
         </div>
 
         {/* Rooms Grid */}
         {filteredRooms.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-300">
-            <div className="mx-auto h-24 w-24 text-gray-300 mb-4">
+          <div className="text-center py-24 bg-white rounded-3xl border border-dashed border-stone-200">
+            <div className="mx-auto h-24 w-24 text-stone-200 mb-6">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No rooms found</h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <h3 className="mt-2 text-xl font-bold text-stone-900">No rooms found</h3>
+            <p className="mt-2 text-stone-500 font-medium">
               {searchQuery ? "Try adjusting your search terms." : "Get started by creating a new room."}
             </p>
             {!searchQuery && (
-              <div className="mt-6">
+              <div className="mt-8">
                 <button
                   onClick={() => {
                     const name = prompt("Enter room name:");
@@ -615,9 +616,9 @@ export default function Home() {
                       handleCreateRoom(name.trim());
                     }
                   }}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-violet-600 bg-violet-50 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500"
+                  className="inline-flex items-center px-6 py-3 border border-stone-200 shadow-sm text-sm font-bold rounded-full text-stone-900 bg-white hover:bg-stone-50 hover:border-yellow-400 transition-all"
                 >
-                  <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="-ml-1 mr-2 h-5 w-5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                   </svg>
                   Create Room
@@ -643,33 +644,33 @@ export default function Home() {
                   return (
                     <div
                       key={room.id}
-                      className="group bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden"
+                      className="group bg-white rounded-2xl border border-stone-100 shadow-sm hover:shadow-xl hover:shadow-stone-200/50 hover:border-yellow-400/50 transition-all duration-300 flex flex-col overflow-hidden"
                     >
                       <div className="p-6 flex-1">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="p-2 bg-violet-50 rounded-lg text-violet-600 group-hover:bg-violet-100 transition-colors">
+                        <div className="flex items-start justify-between mb-6">
+                          <div className="p-3 bg-stone-50 rounded-xl text-stone-900 group-hover:bg-yellow-400 group-hover:text-stone-900 transition-colors duration-300">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                               <path d="M4 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                           </div>
                           <div className="flex items-center gap-2">
                             {room.status === "local-only" ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
                                 Local
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-100">
                                 Synced
                               </span>
                             )}
                           </div>
                         </div>
                         
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate" title={room.title}>
+                        <h3 className="text-xl font-bold text-stone-900 mb-2 truncate" title={room.title}>
                           {room.title}
                         </h3>
                         
-                        <div className="text-sm text-gray-500 flex items-center gap-1.5">
+                        <div className="text-sm text-stone-500 flex items-center gap-2 font-medium">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                           </svg>
@@ -677,12 +678,12 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                      <div className="px-6 py-4 bg-stone-50 border-t border-stone-100 flex items-center justify-between">
                         <Link
                           href={`/room/${room.id}`}
-                          className="text-sm font-medium text-violet-600 hover:text-violet-700 transition-colors"
+                          className="text-sm font-bold text-stone-900 hover:text-yellow-600 transition-colors flex items-center gap-1"
                         >
-                          Open Room &rarr;
+                          Open Room <span className="text-lg">&rarr;</span>
                         </Link>
                         
                         <div className="flex items-center gap-1">
@@ -690,7 +691,7 @@ export default function Home() {
                             <button
                               onClick={() => handleSyncRoom(room.id)}
                               disabled={isSyncing}
-                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               title="Sync to server"
                             >
                               <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -701,7 +702,7 @@ export default function Home() {
                           
                           <button
                             onClick={() => handleEditRoom(room.id)}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                            className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded-lg transition-colors"
                             title="Rename"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -711,7 +712,7 @@ export default function Home() {
                           
                           <button
                             onClick={() => handleDeleteRoom(room.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                            className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -725,25 +726,25 @@ export default function Home() {
                 })}
               </div>
             ) : (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+              <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+                <table className="min-w-full divide-y divide-stone-100">
+                  <thead className="bg-stone-50">
                     <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-stone-500 uppercase tracking-wider">
                         Name
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-stone-500 uppercase tracking-wider">
                         Status
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-stone-500 uppercase tracking-wider">
                         Last Synced
                       </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-stone-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-stone-100">
                     {paginatedRooms.map((room) => {
                       const isSyncing = syncingRooms.has(room.id);
                       const lastSynced = room.lastSyncedAt
@@ -756,40 +757,40 @@ export default function Home() {
                         : null;
 
                       return (
-                        <tr key={room.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
+                        <tr key={room.id} className="hover:bg-stone-50 transition-colors">
+                          <td className="px-6 py-5 whitespace-nowrap">
                             <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10 bg-violet-100 rounded-lg flex items-center justify-center text-violet-600">
+                              <div className="flex-shrink-0 h-10 w-10 bg-stone-100 rounded-lg flex items-center justify-center text-stone-600">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                   <path d="M4 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                 </svg>
                               </div>
                               <div className="ml-4">
-                                <Link href={`/room/${room.id}`} className="text-sm font-medium text-gray-900 hover:text-violet-600">
+                                <Link href={`/room/${room.id}`} className="text-sm font-bold text-stone-900 hover:text-yellow-600">
                                   {room.title}
                                 </Link>
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-5 whitespace-nowrap">
                             {room.status === "local-only" ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
                                 Local
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-100">
                                 Synced
                               </span>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-5 whitespace-nowrap text-sm text-stone-500 font-medium">
                             {lastSynced || "Not synced yet"}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center justify-end gap-2">
+                          <td className="px-6 py-5 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end gap-3">
                               <Link
                                 href={`/room/${room.id}`}
-                                className="text-violet-600 hover:text-violet-900 mr-2"
+                                className="text-stone-900 hover:text-yellow-600 font-bold mr-2"
                               >
                                 Open
                               </Link>
@@ -798,7 +799,7 @@ export default function Home() {
                                 <button
                                   onClick={() => handleSyncRoom(room.id)}
                                   disabled={isSyncing}
-                                  className="text-blue-600 hover:text-blue-900"
+                                  className="text-stone-400 hover:text-blue-600 transition-colors"
                                   title="Sync to server"
                                 >
                                   <svg className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -809,7 +810,7 @@ export default function Home() {
                               
                               <button
                                 onClick={() => handleEditRoom(room.id)}
-                                className="text-gray-400 hover:text-gray-600"
+                                className="text-stone-400 hover:text-stone-600 transition-colors"
                                 title="Rename"
                               >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -819,7 +820,7 @@ export default function Home() {
                               
                               <button
                                 onClick={() => handleDeleteRoom(room.id)}
-                                className="text-gray-400 hover:text-red-600"
+                                className="text-stone-400 hover:text-red-600 transition-colors"
                                 title="Delete"
                               >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -838,42 +839,42 @@ export default function Home() {
 
             {/* Pagination Controls */}
             {totalPages > 1 && (
-              <div className="mt-8 flex items-center justify-center gap-2">
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                
-                <div className="flex items-center gap-1">
+              <div className="mt-12 flex justify-center">
+                <nav className="relative z-0 inline-flex rounded-full shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-3 py-2 rounded-l-full border border-stone-200 bg-white text-sm font-medium text-stone-500 hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Previous</span>
+                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <button
                       key={page}
                       onClick={() => handlePageChange(page)}
-                      className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors ${
+                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                         currentPage === page
-                          ? 'bg-violet-600 text-white shadow-sm'
-                          : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                          ? "z-10 bg-yellow-400 border-yellow-400 text-stone-900 font-bold"
+                          : "bg-white border-stone-200 text-stone-500 hover:bg-stone-50"
                       }`}
                     >
                       {page}
                     </button>
                   ))}
-                </div>
-
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center px-3 py-2 rounded-r-full border border-stone-200 bg-white text-sm font-medium text-stone-500 hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Next</span>
+                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </nav>
               </div>
             )}
           </>

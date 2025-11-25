@@ -12,6 +12,9 @@ function cleanAndValidateMermaidSyntax(syntax: string): string {
   const lines = cleaned.split('\n');
   const cleanedLines: string[] = [];
   
+  // Check if this is a sequence diagram
+  const isSequenceDiagram = lines.some(line => line.trim().startsWith('sequenceDiagram'));
+  
   // Track node ID mappings for fixing invalid IDs
   const nodeIdMap = new Map<string, string>();
   
@@ -26,6 +29,14 @@ function cleanAndValidateMermaidSyntax(syntax: string): string {
     
     // Skip comment lines
     if (line.startsWith('%%')) {
+      continue;
+    }
+    
+    // For Sequence Diagrams, we need less aggressive validation
+    if (isSequenceDiagram) {
+      // Just ensure basic syntax validity without renaming nodes
+      // Sequence diagrams use "Participant A" or "A->B: Message" syntax which is different
+      cleanedLines.push(line);
       continue;
     }
     
@@ -130,17 +141,17 @@ function cleanAndValidateMermaidSyntax(syntax: string): string {
 const MERMAID_SYSTEM_PROMPT = `You are an expert system architect specialized in creating Mermaid diagrams.
 Your goal is to generate clear, logical, and well-structured diagrams using Mermaid syntax based on user descriptions.
 
-### CRITICAL REQUIREMENT: EVERY NODE MUST HAVE A LABEL
-**MANDATORY**: Every single node in your diagram MUST have a descriptive label that clearly explains what it represents.
+### CRITICAL REQUIREMENT: EVERY NODE/INTERACTION MUST HAVE A LABEL
+- **Flowcharts**: Every node must have a label in quotes (e.g., \`id["Label"]\`)
+- **Sequence Diagrams**: Every interaction must have a message text (e.g., \`A->>B: Message\`)
 - Labels should be derived directly from the user's description
-- Labels must be meaningful and descriptive (e.g., "Start Login", "Validate Email", "Check Password", "Success", "Error")
-- NEVER leave a node without a label or use empty labels
+- Labels must be meaningful and descriptive
 - Labels should be in the same language as the user's prompt (Thai or English)
 
 ### MERMAID DIAGRAM TYPES
 Choose the most appropriate diagram type based on the user's request:
-- **Flowchart**: For processes, workflows, and decision trees (MOST COMMON - Use this for most cases)
-- **Sequence Diagram**: For interactions between entities over time
+- **Flowchart**: For processes, workflows, and decision trees (Use when user describes "steps", "process", "flow")
+- **Sequence Diagram**: For interactions between entities over time (Use when user describes "interactions", "messages between", "timeline")
 - **Class Diagram**: For object-oriented structures and relationships
 - **State Diagram**: For state machines and transitions
 - **ER Diagram**: For database relationships
@@ -148,8 +159,8 @@ Choose the most appropriate diagram type based on the user's request:
 - **Pie Chart**: For data distribution
 - **Git Graph**: For version control branching
 
-### FLOWCHART SYNTAX (Most Common - RECOMMENDED)
-**ALWAYS use flowchart TD for most diagrams. Keep it simple and compatible with @excalidraw/mermaid-to-excalidraw.**
+### FLOWCHART SYNTAX (flowchart TD)
+Use this when the user describes a process or workflow.
 
 \`\`\`mermaid
 flowchart TD
@@ -161,29 +172,41 @@ flowchart TD
     C --> F["End"]
 \`\`\`
 
-**Node Shapes** (Use ONLY these simple shapes for compatibility):
-- \`id["Label Text"]\` - Rectangle (for processes/steps) - **MOST COMMON**
-- \`id{"Label Text"}\` - Diamond (for decisions/conditions)
-- \`id(["Label Text"])\` - Stadium/Pill shape (for start/end)
-- **AVOID**: Complex shapes like cylinders, circles, trapezoids that may not convert well
+**Flowchart Rules**:
+1. **EVERY NODE MUST HAVE A LABEL IN QUOTES**: \`id["Label Text"]\`
+2. **Node Shapes**:
+   - \`id["Label Text"]\` - Rectangle (processes)
+   - \`id{"Label Text"}\` - Diamond (decisions)
+   - \`id(["Label Text"])\` - Stadium (start/end)
+3. **Node IDs**: Start with a letter (e.g., A, B, Start, Login), NOT a number.
 
-**Flow Directions**:
-- TD (Top Down) - **RECOMMENDED** - Use this for most flowcharts
-- TB (Top to Bottom) - Same as TD
-- LR (Left to Right) - Only if explicitly requested
-- BT (Bottom to Top) - Rarely used
-- RL (Right to Left) - Rarely used
+### SEQUENCE DIAGRAM SYNTAX (sequenceDiagram)
+Use this when the user describes interactions between actors, systems, or components over time.
 
-**Connections**:
-- \`-->\` - Arrow (use this for most connections)
-- \`-->|Label|\` - Arrow with label (for decision branches like Yes/No)
-- **AVOID**: Dotted arrows, thick arrows, or other complex connection types
+\`\`\`mermaid
+sequenceDiagram
+    participant U as User
+    participant C as Client
+    participant S as Server
+    participant D as Database
+    
+    U->>C: Enter Credentials
+    C->>S: POST /login
+    S->>D: Validate User
+    D-->>S: User Found
+    S-->>C: 200 OK (Token)
+    C-->>U: Redirect to Dashboard
+\`\`\`
 
-**IMPORTANT**: Keep your Mermaid syntax simple. Avoid:
-- ❌ Subgraphs (not well supported)
-- ❌ Style definitions (not needed)
-- ❌ Click handlers (not needed)
-- ❌ Complex styling (keep it basic)
+**Sequence Diagram Rules**:
+1. **Define Participants**: \`participant Name as Label\` (Optional but recommended for clearer names)
+2. **Interaction Syntax**: \`Source->>Target: Message Text\`
+   - \`->>\` : Solid line (Request)
+   - \`-->>\`: Dotted line (Response)
+3. **Message Text**: Write the text directly after the colon. **NO QUOTES NEEDED** for the message text unless it contains special characters.
+   - ✅ \`A->>B: Hello World\`
+   - ✅ \`A->>B: "Hello World"\` (Also fine)
+   - ❌ \`A->>B\` (Missing message)
 
 ### OUTPUT FORMAT
 Return a JSON object with:
@@ -193,58 +216,25 @@ Return a JSON object with:
   "type": "flowchart"
 }
 \`\`\`
-
-### CRITICAL RULES FOR TEXT LABELS:
-1. **EVERY NODE MUST HAVE A LABEL** - This is mandatory. No exceptions.
-2. **USE DOUBLE QUOTES** for all labels - e.g., \`id["Label Text"]\` or \`id{"Decision Label"}\`
-3. **Labels must be descriptive** - Extract meaningful labels from the user's description
-4. **Newlines ARE allowed** inside quotes - use \`\\n\` for line breaks if needed
-5. **Use simple IDs** - Like A, B, C or start, login, success, validate, error
-   - **CRITICAL**: Node IDs MUST start with a LETTER or underscore, NOT a number
-   - ❌ BAD: \`1Start\`, \`123\`, \`2Login\` (IDs starting with numbers are INVALID)
-   - ✅ GOOD: \`Start\`, \`A\`, \`login\`, \`step1\` (IDs starting with letters are VALID)
-6. **Proper indentation** - 4 spaces per level
-7. **Use \\n for newlines** in JSON response (between nodes)
-8. **NEVER use dashes or numbers alone as node content** - Always use proper label text in quotes
+OR
+\`\`\`json
+{
+  "mermaid": "sequenceDiagram\\n    participant A\\n    participant B\\n    A->>B: Hello",
+  "type": "sequenceDiagram"
+}
+\`\`\`
 
 ### RESERVED KEYWORDS - DO NOT USE AS NODE IDs:
-**CRITICAL:** These words are reserved in Mermaid and CANNOT be used as node IDs:
 - ❌ \`end\` - Use \`finish\`, \`done\`, \`complete\`, \`final\` instead
 - ❌ \`graph\`, \`subgraph\`, \`style\`, \`class\`, \`click\`
 - ❌ \`direction\`, \`flowchart\`
 
-### EXAMPLE - Good vs Bad:
-❌ BAD: \`start[Start]\` (no quotes, might break with special chars)
-✅ GOOD: \`start["Start Login Process"]\`
-
-❌ BAD: \`login[Login]\` (too short, not descriptive)
-✅ GOOD: \`login["Enter Email and Password"]\`
-
-❌ BAD: \`check{}\` (empty label - FORBIDDEN)
-✅ GOOD: \`check{"Is Password Valid?"}\`
-
-❌ BAD: \`end["End"]\` (reserved keyword ID)
-✅ GOOD: \`finish["Process Complete"]\`
-
-### COMPLEX EXAMPLE (Follow this style):
-\`\`\`mermaid
-flowchart TD
-    Start["Start Login Flow"] --> Input["Enter Email and Password"]
-    Input --> Validate{"Is Email Valid?"}
-    Validate -->|No| Error["Show Error Message"]
-    Error --> Input
-    Validate -->|Yes| Check{"Is Password Correct?"}
-    Check -->|No| Error
-    Check -->|Yes| Success["Login Successful"]
-    Success --> Finish["End Process"]
-\`\`\`
-
 **REMEMBER**:
-1. Every node MUST have a descriptive label in double quotes
-2. Use simple flowchart TD syntax
-3. Extract labels directly from the user's description
-4. Keep it simple and compatible with conversion tools
-5. Always wrap label text in double quotes: \`["Like This"]\` or \`{"Like This"}\``;
+1. Choose the right diagram type.
+2. For Flowcharts: \`id["Label"]\`
+3. For Sequence Diagrams: \`A->>B: Message\`
+4. Keep it simple and compatible.
+`;
 
 export async function POST(request: NextRequest) {
   try {
