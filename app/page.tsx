@@ -78,12 +78,16 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-[#faf9f6]/80 backdrop-blur-md border-b border-stone-100">
         <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center text-white group-hover:bg-stone-800 transition-colors">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
+              <Image
+                src="/logo.svg"
+                alt="Excaflow Logo"
+                width={32}
+                height={32}
+                className="object-cover"
+              />
             </div>
-            <span className="text-lg font-medium tracking-tight text-stone-900">
+            <span className="text-xl font-bold tracking-tight text-stone-900 font-display">
               Excaflow
             </span>
           </Link>
@@ -349,12 +353,16 @@ export default function LandingPage() {
       <footer className="border-t border-stone-200 bg-white py-12 px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-stone-900 rounded flex items-center justify-center text-white">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+            <div className="w-6 h-6 rounded-lg flex items-center justify-center overflow-hidden">
+              <Image
+                src="/logo.svg"
+                alt="Excaflow Logo"
+                width={24}
+                height={24}
+                className="object-cover"
+              />
             </div>
-            <span className="font-medium text-stone-900">Excaflow</span>
+            <span className="text-lg font-bold tracking-tight text-stone-900">Excaflow</span>
           </div>
           
           <div className="flex gap-8 text-sm text-stone-500">

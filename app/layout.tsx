@@ -13,8 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Excalidraw Rooms",
-  description: "Create and manage Excalidraw drawing rooms",
+  title: "Excaflow",
+  description: "Visual-First Specification Platform for the AI Era",
+  icons: {
+    icon: '/logo.svg',
+  },
 };
 
 export default function RootLayout({
