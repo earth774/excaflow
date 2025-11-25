@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserIdFromRequest } from "@/lib/supabaseServer";
-import { uploadRoomFileToStorage } from "@/lib/supabaseStorage";
+import { uploadRoomFileToStorage } from "@/lib/r2Storage";
 
 export async function POST(request: NextRequest) {
   try {
@@ -89,8 +89,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload file to Supabase Storage
-    console.log("[upload-file] Starting upload to Supabase Storage...");
+    // Upload file to R2 Storage
+    console.log("[upload-file] Starting upload to R2 Storage...");
     const publicUrl = await uploadRoomFileToStorage(
       roomId,
       fileId,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserIdFromRequest } from "@/lib/supabaseServer";
-import { deleteRoomFolder } from "@/lib/supabaseStorage";
+import { deleteRoomFolder } from "@/lib/r2Storage";
 
 export async function GET(
   request: NextRequest,
