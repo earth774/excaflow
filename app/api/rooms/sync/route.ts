@@ -60,6 +60,15 @@ export async function POST(request: NextRequest) {
           description: body.description || null,
           scene: sceneWithFiles as any,
           lastSyncedAt: new Date(),
+          tags: body.tags || [],
+        },
+      });
+
+      // Create history entry
+      await prisma.roomHistory.create({
+        data: {
+          roomId: body.id,
+          scene: sceneWithFiles as any,
         },
       });
     } else {
@@ -72,6 +81,7 @@ export async function POST(request: NextRequest) {
           description: body.description || null,
           scene: sceneWithFiles as any,
           lastSyncedAt: new Date(),
+          tags: body.tags || [],
         },
       });
     }

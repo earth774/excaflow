@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
         title,
         description: description || null,
         scene: scene as any,
+        tags: body.tags || [],
       },
     });
 

@@ -19,11 +19,24 @@ model Room {
   title        String
   description  String?
   scene        Json
+  tags         String[] @default([])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   lastSyncedAt DateTime?
   
+  history      RoomHistory[]
+
   @@index([ownerId])
+}
+
+model RoomHistory {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  scene     Json
+  createdAt DateTime @default(now())
+
+  @@index([roomId])
 }
 
 model User {

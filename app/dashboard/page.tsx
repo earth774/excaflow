@@ -17,6 +17,7 @@ import { authenticatedFetch } from "@/lib/apiClient";
 import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
 import type { RoomIndexEntry, LocalRoom } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
+import Modal from "@/components/Modal";
 
 export default function Home() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export default function Home() {
   const [rooms, setRooms] = useState<RoomIndexEntry[]>([]);
   const [filteredRooms, setFilteredRooms] = useState<RoomIndexEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [syncingRooms, setSyncingRooms] = useState<Set<string>>(new Set());
@@ -33,6 +35,15 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
+
+  // Modal State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [roomNameInput, setRoomNameInput] = useState("");
+  const [roomTagsInput, setRoomTagsInput] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -132,16 +143,38 @@ export default function Home() {
 
 
   useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredRooms(rooms);
-    } else {
-      const filtered = rooms.filter((room) =>
+    let result = rooms;
+
+    // Filter by search query
+    if (searchQuery.trim() !== "") {
+      result = result.filter((room) =>
         room.title.toLowerCase().includes(searchQuery.toLowerCase())
       );
-      setFilteredRooms(filtered);
     }
-    setCurrentPage(1); // Reset to first page on search
-  }, [searchQuery, rooms]);
+
+    // Filter by selected tags
+    if (selectedTags.length > 0) {
+      result = result.filter((room) =>
+        room.tags && selectedTags.every((tag) => room.tags.includes(tag))
+      );
+    }
+
+    setFilteredRooms(result);
+    setCurrentPage(1); // Reset to first page on search/filter
+  }, [searchQuery, selectedTags, rooms]);
+
+  // Get all unique tags from rooms
+  const allTags = Array.from(
+    new Set(rooms.flatMap((room) => room.tags || []))
+  ).sort();
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag)
+        ? prev.filter((t) => t !== tag)
+        : [...prev, tag]
+    );
+  };
 
   // Pagination Logic
   const totalPages = Math.ceil(filteredRooms.length / itemsPerPage);
@@ -237,6 +270,7 @@ export default function Home() {
             lastSyncedAt: serverRoom.lastSyncedAt
               ? new Date(serverRoom.lastSyncedAt).toISOString()
               : null,
+            tags: serverRoom.tags || [],
           });
           
           // Also save full room data to localStorage for draft management
@@ -251,6 +285,7 @@ export default function Home() {
               ? new Date(serverRoom.lastSyncedAt).toISOString()
               : null,
             status: "synced",
+            tags: serverRoom.tags || [],
           };
           await saveLocalRoom(localRoom);
         }
@@ -270,10 +305,17 @@ export default function Home() {
     }
   };
 
-  const handleCreateRoom = async (name?: string) => {
-    const roomName = name?.trim();
+  const openCreateModal = () => {
+    setRoomNameInput("");
+    setRoomTagsInput("");
+    setIsCreateModalOpen(true);
+  };
+
+  const handleCreateRoom = async () => {
+    const roomName = roomNameInput.trim();
     if (!roomName) return;
 
+    setIsSubmitting(true);
     try {
       // Create room in database immediately (not in localStorage)
       const response = await authenticatedFetch("/api/rooms", {
@@ -286,6 +328,7 @@ export default function Home() {
             appState: {},
             files: {},
           },
+          tags: roomTagsInput.split(",").map(t => t.trim()).filter(Boolean),
         }),
       });
 
@@ -307,6 +350,7 @@ export default function Home() {
           ? new Date(dbRoom.lastSyncedAt).toISOString()
           : null,
         status: "synced",
+        tags: dbRoom.tags || [],
       };
       await saveLocalRoom(localRoom);
       
@@ -319,11 +363,14 @@ export default function Home() {
       setRooms(updatedRooms);
       setFilteredRooms(updatedRooms);
       
+      setIsCreateModalOpen(false);
       // Redirect to room page
       router.push(`/room/${dbRoom.id}`);
     } catch (error) {
       console.error("Error creating room:", error);
       alert("ไม่สามารถสร้างห้องได้ กรุณาลองอีกครั้ง");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -385,15 +432,19 @@ export default function Home() {
     }
   };
 
-  const handleDeleteRoom = async (roomId: string) => {
-    if (!confirm("คุณต้องการลบห้องนี้หรือไม่?")) {
-      return;
-    }
+  const openDeleteModal = (roomId: string) => {
+    setSelectedRoomId(roomId);
+    setIsDeleteModalOpen(true);
+  };
 
+  const handleDeleteRoom = async () => {
+    if (!selectedRoomId) return;
+
+    setIsSubmitting(true);
     try {
       // Try to delete from database first (always try, regardless of sync status)
       try {
-        const response = await authenticatedFetch(`/api/rooms/${roomId}`, {
+        const response = await authenticatedFetch(`/api/rooms/${selectedRoomId}`, {
           method: "DELETE",
         });
 
@@ -411,7 +462,7 @@ export default function Home() {
       }
 
       // Delete from localStorage
-      await deleteLocalRoom(roomId);
+      await deleteLocalRoom(selectedRoomId);
       
       // Refresh rooms list
       const updatedRooms = loadRoomsIndex().sort((a, b) => {
@@ -421,26 +472,50 @@ export default function Home() {
       });
       setRooms(updatedRooms);
       setFilteredRooms(updatedRooms);
+      setIsDeleteModalOpen(false);
     } catch (error) {
       console.error("Error deleting room:", error);
       alert("ไม่สามารถลบห้องได้ กรุณาลองอีกครั้ง");
+    } finally {
+      setIsSubmitting(false);
+      setSelectedRoomId(null);
     }
   };
 
-  const handleEditRoom = async (roomId: string) => {
+  const openEditModal = (roomId: string) => {
     const room = rooms.find((r) => r.id === roomId);
     if (room) {
-      const newTitle = prompt("แก้ไขชื่อห้อง:", room.title);
-      if (newTitle && newTitle.trim()) {
-        await updateLocalRoomMetadata(roomId, { title: newTitle.trim() });
-        const updatedRooms = loadRoomsIndex().sort((a, b) => {
-          const dateA = new Date(a.updatedAt || a.createdAt).getTime();
-          const dateB = new Date(b.updatedAt || b.createdAt).getTime();
-          return dateB - dateA; // Descending order (newest first)
-        });
-        setRooms(updatedRooms);
-        setFilteredRooms(updatedRooms);
-      }
+      setSelectedRoomId(roomId);
+      setRoomNameInput(room.title);
+      setRoomTagsInput(room.tags ? room.tags.join(", ") : "");
+      setIsEditModalOpen(true);
+    }
+  };
+
+  const handleEditRoom = async () => {
+    if (!selectedRoomId || !roomNameInput.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const tags = roomTagsInput.split(",").map(t => t.trim()).filter(Boolean);
+      await updateLocalRoomMetadata(selectedRoomId, { 
+        title: roomNameInput.trim(),
+        tags
+      });
+      const updatedRooms = loadRoomsIndex().sort((a, b) => {
+        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
+        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
+      setRooms(updatedRooms);
+      setFilteredRooms(updatedRooms);
+      setIsEditModalOpen(false);
+    } catch (error) {
+      console.error("Error updating room:", error);
+      alert("Failed to update room name");
+    } finally {
+      setIsSubmitting(false);
+      setSelectedRoomId(null);
     }
   };
 
@@ -536,12 +611,7 @@ export default function Home() {
             <p className="text-lg text-stone-500 font-medium max-w-lg">Manage your visual specifications and share them with your team.</p>
           </div>
           <button
-            onClick={() => {
-              const name = prompt("Enter room name:");
-              if (name && name.trim()) {
-                handleCreateRoom(name.trim());
-              }
-            }}
+            onClick={openCreateModal}
             className="inline-flex items-center px-6 py-3 border border-transparent text-base font-bold rounded-full shadow-lg shadow-stone-900/10 text-white bg-stone-900 hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-900 transition-all transform hover:-translate-y-0.5"
           >
             <svg className="-ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -600,6 +670,39 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Tag Filters */}
+        {allTags.length > 0 && (
+          <div className="mb-8 flex flex-wrap gap-2 items-center">
+            <span className="text-sm font-medium text-stone-500 mr-2">Filter by tags:</span>
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                  selectedTags.includes(tag)
+                    ? "bg-stone-900 text-white shadow-md transform scale-105"
+                    : "bg-white text-stone-600 border border-stone-200 hover:border-stone-400 hover:bg-stone-50"
+                }`}
+              >
+                {tag}
+                {selectedTags.includes(tag) && (
+                  <svg className="ml-1.5 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                )}
+              </button>
+            ))}
+            {selectedTags.length > 0 && (
+              <button
+                onClick={() => setSelectedTags([])}
+                className="ml-2 text-xs font-medium text-stone-400 hover:text-stone-600 underline"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Rooms Grid */}
         {filteredRooms.length === 0 ? (
           <div className="text-center py-24 bg-white rounded-3xl border border-dashed border-stone-200">
@@ -615,12 +718,7 @@ export default function Home() {
             {!searchQuery && (
               <div className="mt-8">
                 <button
-                  onClick={() => {
-                    const name = prompt("Enter room name:");
-                    if (name && name.trim()) {
-                      handleCreateRoom(name.trim());
-                    }
-                  }}
+                  onClick={openCreateModal}
                   className="inline-flex items-center px-6 py-3 border border-stone-200 shadow-sm text-sm font-bold rounded-full text-stone-900 bg-white hover:bg-stone-50 hover:border-yellow-400 transition-all"
                 >
                   <svg className="-ml-1 mr-2 h-5 w-5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -675,6 +773,16 @@ export default function Home() {
                           {room.title}
                         </h3>
                         
+                        {room.tags && room.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {room.tags.map((tag, i) => (
+                              <span key={i} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-stone-100 text-stone-600">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        
                         <div className="text-sm text-stone-500 flex items-center gap-2 font-medium">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -706,7 +814,7 @@ export default function Home() {
                           )}
                           
                           <button
-                            onClick={() => handleEditRoom(room.id)}
+                            onClick={() => openEditModal(room.id)}
                             className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded-lg transition-colors"
                             title="Rename"
                           >
@@ -716,7 +824,7 @@ export default function Home() {
                           </button>
                           
                           <button
-                            onClick={() => handleDeleteRoom(room.id)}
+                            onClick={() => openDeleteModal(room.id)}
                             className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete"
                           >
@@ -814,7 +922,7 @@ export default function Home() {
                               )}
                               
                               <button
-                                onClick={() => handleEditRoom(room.id)}
+                                onClick={() => openEditModal(room.id)}
                                 className="text-stone-400 hover:text-stone-600 transition-colors"
                                 title="Rename"
                               >
@@ -824,7 +932,7 @@ export default function Home() {
                               </button>
                               
                               <button
-                                onClick={() => handleDeleteRoom(room.id)}
+                                onClick={() => openDeleteModal(room.id)}
                                 className="text-stone-400 hover:text-red-600 transition-colors"
                                 title="Delete"
                               >
@@ -884,6 +992,164 @@ export default function Home() {
             )}
           </>
         )}
+        {/* Create Room Modal */}
+        <Modal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          title="Create New Room"
+          footer={
+            <>
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateRoom}
+                disabled={isSubmitting || !roomNameInput.trim()}
+                className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-lg hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Creating..." : "Create Room"}
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="roomName" className="block text-sm font-medium text-stone-700 mb-1">
+                Room Name
+              </label>
+              <input
+                type="text"
+                id="roomName"
+                value={roomNameInput}
+                onChange={(e) => setRoomNameInput(e.target.value)}
+                placeholder="e.g. Project Alpha"
+                className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 transition-all duration-200 ease-in-out sm:text-sm font-medium"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && roomNameInput.trim()) {
+                    handleCreateRoom();
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label htmlFor="roomTags" className="block text-sm font-medium text-stone-700 mb-1">
+                Tags
+              </label>
+              <input
+                type="text"
+                id="roomTags"
+                value={roomTagsInput}
+                onChange={(e) => setRoomTagsInput(e.target.value)}
+                placeholder="e.g. design, marketing, urgent (comma separated)"
+                className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 transition-all duration-200 ease-in-out sm:text-sm font-medium"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleCreateRoom();
+                  }
+                }}
+              />
+              <p className="mt-1 text-xs text-stone-500">Separate multiple tags with commas</p>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Edit Room Modal */}
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          title="Rename Room"
+          footer={
+            <>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditRoom}
+                disabled={isSubmitting || !roomNameInput.trim()}
+                className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-lg hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Saving..." : "Save Changes"}
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="editRoomName" className="block text-sm font-medium text-stone-700 mb-1">
+                Room Name
+              </label>
+              <input
+                type="text"
+                id="editRoomName"
+                value={roomNameInput}
+                onChange={(e) => setRoomNameInput(e.target.value)}
+                className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 transition-all duration-200 ease-in-out sm:text-sm font-medium"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && roomNameInput.trim()) {
+                    handleEditRoom();
+                  }
+                }}
+              />
+            </div>
+            <div>
+              <label htmlFor="editRoomTags" className="block text-sm font-medium text-stone-700 mb-1">
+                Tags
+              </label>
+              <input
+                type="text"
+                id="editRoomTags"
+                value={roomTagsInput}
+                onChange={(e) => setRoomTagsInput(e.target.value)}
+                placeholder="e.g. design, marketing, urgent (comma separated)"
+                className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 transition-all duration-200 ease-in-out sm:text-sm font-medium"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleEditRoom();
+                  }
+                }}
+              />
+              <p className="mt-1 text-xs text-stone-500">Separate multiple tags with commas</p>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Delete Room Modal */}
+        <Modal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          title="Delete Room"
+          footer={
+            <>
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteRoom}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Deleting..." : "Delete Room"}
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-stone-500">
+              Are you sure you want to delete this room? This action cannot be undone.
+            </p>
+          </div>
+        </Modal>
       </main>
     </div>
   );

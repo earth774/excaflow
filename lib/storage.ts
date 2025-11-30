@@ -171,6 +171,7 @@ export async function saveLocalRoom(room: LocalRoom): Promise<void> {
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
       lastSyncedAt: room.lastSyncedAt,
+      tags: room.tags || [],
     });
   } catch (error) {
     console.error("Error saving local room:", error);
@@ -199,6 +200,7 @@ export async function deleteLocalRoom(roomId: string): Promise<void> {
 export async function createLocalRoom(
   title: string,
   description?: string,
+  tags: string[] = [],
   roomId?: string
 ): Promise<LocalRoom> {
   const now = new Date().toISOString();
@@ -217,6 +219,7 @@ export async function createLocalRoom(
     updatedAt: now,
     lastSyncedAt: null,
     status: "local-only",
+    tags,
   };
 
   await saveLocalRoom(newRoom);
@@ -259,7 +262,7 @@ export async function updateLocalRoomScene(
 // Update room metadata (title, description)
 export async function updateLocalRoomMetadata(
   roomId: string,
-  updates: { title?: string; description?: string }
+  updates: { title?: string; description?: string; tags?: string[] }
 ): Promise<void> {
   const room = await loadLocalRoom(roomId);
   if (!room) return;

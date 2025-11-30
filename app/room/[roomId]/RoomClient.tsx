@@ -264,6 +264,9 @@ export default function RoomClient() {
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   const [uploadedFiles, setUploadedFiles] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyList, setHistoryList] = useState<{ id: string; createdAt: string }[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
 
@@ -512,6 +515,7 @@ export default function RoomClient() {
                   ? new Date(dbRoom.lastSyncedAt).toISOString()
                   : null,
                 status: "synced" as RoomStatus,
+                tags: dbRoom.tags || [],
               };
               
               // Always save merged room to localStorage
@@ -548,7 +552,8 @@ export default function RoomClient() {
               lastSyncedAt: dbRoom.lastSyncedAt
                 ? new Date(dbRoom.lastSyncedAt).toISOString()
                 : null,
-              status: "synced",
+              status: "synced" as RoomStatus,
+              tags: dbRoom.tags || [],
             };
             
             await saveLocalRoom(roomToUse);
@@ -851,7 +856,7 @@ export default function RoomClient() {
           },
           updatedAt: new Date().toISOString(),
           // If previously synced, mark as local-only after update
-          status: localRoom.status === "synced" ? "local-only" : localRoom.status,
+          status: (localRoom.status === "synced" ? "local-only" : localRoom.status) as RoomStatus,
         };
 
         console.log("handleChange: Saving room:", roomId, {
@@ -875,6 +880,66 @@ export default function RoomClient() {
     },
     [localRoom, roomId, syncStatus.status, syncStatus.dbExists, isOwner, uploadFileToSupabase, excalidrawAPI, isSubscriptionActive]
   );
+
+  const fetchHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const response = await authenticatedFetch(`/api/rooms/${roomId}/history`);
+      if (response.ok) {
+        const data = await response.json();
+        setHistoryList(data);
+      }
+    } catch (error) {
+      console.error("Error fetching history:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const restoreVersion = async (historyId: string) => {
+    if (!confirm("Are you sure you want to restore this version? Current unsaved changes might be lost.")) {
+      return;
+    }
+
+    try {
+      const response = await authenticatedFetch(`/api/rooms/${roomId}/history/${historyId}`);
+      if (!response.ok) throw new Error("Failed to fetch version");
+      
+      const version = await response.json();
+      
+      if (version.scene) {
+        const scene = version.scene;
+        // Restore scene
+        if (excalidrawAPI) {
+          excalidrawAPI.updateScene({
+            elements: scene.elements,
+            appState: scene.appState,
+            files: scene.files,
+          });
+          
+          // Save as current local room
+          if (localRoom) {
+            const updatedRoom: LocalRoom = {
+              ...localRoom,
+              scene: scene,
+              updatedAt: new Date().toISOString(),
+              status: "local-only", // Mark as local so it syncs back as new version
+              tags: localRoom.tags || [],
+            };
+            setLocalRoom(updatedRoom);
+            await saveLocalRoom(updatedRoom);
+            
+            // Trigger sync to save this restored version as the latest on server
+            setSyncStatus(prev => ({ ...prev, needsSync: true }));
+          }
+        }
+        setShowHistoryModal(false);
+      }
+    } catch (error) {
+      console.error("Error restoring version:", error);
+      alert("Failed to restore version");
+    }
+  };
 
   // Sync: Push local to server
   const handlePush = async () => {
@@ -1037,7 +1102,8 @@ export default function RoomClient() {
         lastSyncedAt: dbRoom.lastSyncedAt
           ? new Date(dbRoom.lastSyncedAt).toISOString()
           : new Date().toISOString(),
-        status: "synced",
+        status: "synced" as RoomStatus,
+        tags: dbRoom.tags || [],
       };
 
       // Save to localStorage
@@ -1524,7 +1590,20 @@ export default function RoomClient() {
 
         {/* Sidebar Footer */}
         {isOwner && (
-          <div className="p-6 border-t border-stone-200/50 bg-[#faf9f6]">
+          <div className="p-6 border-t border-stone-200/50 bg-[#faf9f6] space-y-3">
+            <button
+              onClick={() => {
+                setShowHistoryModal(true);
+                fetchHistory();
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 font-bold rounded-full transition-all shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>History</span>
+            </button>
+
             <button
               onClick={() => handleLockedFeature(() => setShowAIModal(true))}
               className={`w-full flex items-center justify-center gap-2 px-4 py-3 bg-stone-900 hover:bg-stone-800 text-white font-bold rounded-full transition-all shadow-lg shadow-stone-900/20 transform hover:-translate-y-0.5 ${
@@ -1701,6 +1780,68 @@ export default function RoomClient() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full border border-stone-100 animate-in zoom-in-95 duration-200 flex flex-col max-h-[80vh]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-stone-900">
+                Version History
+              </h3>
+              <button 
+                onClick={() => setShowHistoryModal(false)}
+                className="p-1 hover:bg-stone-100 rounded-full transition-colors"
+              >
+                <svg className="w-5 h-5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+              {isLoadingHistory ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin" />
+                </div>
+              ) : historyList.length === 0 ? (
+                <div className="text-center py-8 text-stone-500">
+                  No history versions found.
+                </div>
+              ) : (
+                historyList.map((version) => (
+                  <div 
+                    key={version.id}
+                    className="flex items-center justify-between p-4 bg-stone-50 border border-stone-100 rounded-xl hover:border-stone-300 transition-colors"
+                  >
+                    <div>
+                      <div className="font-bold text-stone-900">
+                        {new Date(version.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </div>
+                      <div className="text-xs text-stone-500 font-medium">
+                        {new Date(version.createdAt).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "numeric",
+                        })}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => restoreVersion(version.id)}
+                      className="px-3 py-1.5 text-xs font-bold text-stone-700 bg-white border border-stone-200 rounded-lg hover:bg-stone-100 hover:text-stone-900 transition-colors"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

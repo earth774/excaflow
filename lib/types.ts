@@ -24,6 +24,7 @@ export interface RoomIndexEntry {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   lastSyncedAt: string | null; // ISO string or null
+  tags: string[];
 }
 
 // Full room data stored in localStorage
@@ -36,6 +37,7 @@ export interface LocalRoom {
   updatedAt: string; // ISO string
   lastSyncedAt: string | null; // ISO string or null
   status: RoomStatus;
+  tags: string[];
 }
 
 // Room from database (Prisma)
@@ -47,6 +49,7 @@ export interface Room {
   createdAt: Date;
   updatedAt: Date;
   lastSyncedAt: Date | null;
+  tags: string[];
 }
 
 // Legacy Room type for backward compatibility (deprecated)
