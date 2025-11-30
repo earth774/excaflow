@@ -61,3 +61,16 @@ export interface LegacyRoom {
 
 export type SaveStatus = "saved" | "unsaved" | "saving";
 
+export const ROOM_STATUSES = ["local-only", "synced"] as const;
+export const SAVE_STATUSES = ["saved", "unsaved", "saving"] as const;
+
+export const DEFAULT_SCENE: ExcalidrawScene = {
+  elements: [],
+  appState: {},
+  files: {},
+};
+
+export function isRoomStatus(status: string): status is RoomStatus {
+  return (ROOM_STATUSES as readonly string[]).includes(status);
+}
+
