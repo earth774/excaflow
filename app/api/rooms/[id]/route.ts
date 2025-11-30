@@ -137,6 +137,16 @@ export async function PUT(
       },
     });
 
+    // Create history entry if scene is updated
+    if (scene) {
+      await prisma.roomHistory.create({
+        data: {
+          roomId: roomId,
+          scene: scene as any,
+        },
+      });
+    }
+
     return NextResponse.json(updatedRoom);
   } catch (error) {
     console.error("Error updating room:", error);
