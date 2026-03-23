@@ -206,7 +206,18 @@ const Excalidraw = dynamic(
 
 import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
 
-// ... existing imports
+/** Max prompt length — must match app/api/ai/generate-diagram/route.ts */
+const AI_PROMPT_MAX = 1000;
+
+const AI_EXAMPLE_PROMPTS = [
+  "Flowchart ระบบ login: เริ่มต้น → กรอกอีเมล → ตรวจสอบรหัส → สำเร็จ / ล้มเหลว",
+  "Sequence diagram: User, Next.js API, Database สำหรับการสั่งซื้อสินค้า",
+  "State diagram สถานะคำสั่งซื้อ: รอชำระ, กำลังจัดส่ง, สำเร็จ, ยกเลิก",
+] as const;
+
+function aiFlashStorageKey(roomId: string) {
+  return `roomAiDiagramFlash_${roomId}`;
+}
 
 const LockIcon = ({ className }: { className?: string }) => (
   <svg 
@@ -258,8 +269,10 @@ export default function RoomClient() {
   const [isSubscriptionActive, setIsSubscriptionActive] = useState<boolean>(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiPrompt, setAIPrompt] = useState("");
+  const [aiMergeMode, setAiMergeMode] = useState<"append" | "replace">("append");
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiError, setAIError] = useState<string | null>(null);
+  const [aiSuccessBanner, setAiSuccessBanner] = useState<string | null>(null);
   const [uploadErrors, setUploadErrors] = useState<Map<string, string>>(new Map());
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   const [uploadedFiles, setUploadedFiles] = useState<Set<string>>(new Set());
@@ -425,6 +438,40 @@ export default function RoomClient() {
     }
     uploadedFileIdsRef.current = uploadedIds;
   }, []);
+
+  // Post-reload success toast (avoids blocking alert() before reload)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem(aiFlashStorageKey(roomId));
+      if (!raw) return;
+      sessionStorage.removeItem(aiFlashStorageKey(roomId));
+      const data = JSON.parse(raw) as { message?: string };
+      if (data?.message) setAiSuccessBanner(data.message);
+    } catch {
+      /* ignore */
+    }
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!aiSuccessBanner) return;
+    const t = window.setTimeout(() => setAiSuccessBanner(null), 5500);
+    return () => window.clearTimeout(t);
+  }, [aiSuccessBanner]);
+
+  useEffect(() => {
+    if (!showAIModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowAIModal(false);
+        setAIPrompt("");
+        setAIError(null);
+        setAiMergeMode("append");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showAIModal]);
 
   // Load room: first from DB, then check localStorage for drafts
   useEffect(() => {
@@ -1147,8 +1194,8 @@ export default function RoomClient() {
       const response = await authenticatedFetch("/api/ai/generate-diagram", {
         method: "POST",
         body: JSON.stringify({
-          prompt: aiPrompt.trim(),
-          roomId,
+          prompt: aiPrompt.trim().slice(0, AI_PROMPT_MAX),
+          format: "excalidraw",
         }),
       });
 
@@ -1381,25 +1428,35 @@ export default function RoomClient() {
         throw new Error("No elements generated");
       }
 
-      // Merge new elements with existing ones
       const currentElements = localRoom.scene.elements || [];
-      const mergedElements = [...currentElements, ...newElements];
+      const mergedElements =
+        aiMergeMode === "replace"
+          ? newElements
+          : [...currentElements, ...newElements];
 
-      // Save to localStorage
       const updatedScene: ExcalidrawScene = {
         ...localRoom.scene,
         elements: mergedElements,
       };
       updateLocalRoomScene(roomId, updatedScene);
 
-      // Close modal and reset prompt
+      const successMsg =
+        aiMergeMode === "replace"
+          ? `สร้างไดอะแกรมสำเร็จ — แทนที่เนื้อหาแคนวาสด้วย ${newElements.length} รายการ`
+          : `สร้างไดอะแกรมสำเร็จ — เพิ่ม ${newElements.length} รายการต่อจากของเดิม`;
+      try {
+        sessionStorage.setItem(
+          aiFlashStorageKey(roomId),
+          JSON.stringify({ message: successMsg })
+        );
+      } catch {
+        /* quota / private mode */
+      }
+
       setShowAIModal(false);
       setAIPrompt("");
-      
-      // Show success message
-      alert(`สร้างไดอะแกรมสำเร็จ! เพิ่ม ${newElements.length} elements`);
+      setAiMergeMode("append");
 
-      // Refresh page to avoid infinite loop
       setTimeout(() => {
         window.location.reload();
       }, 100);
@@ -1718,48 +1775,145 @@ export default function RoomClient() {
 
       {/* ─── AI Modal ─────────────────────────────────── */}
       {showAIModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-stone-100">
-            <div className="flex justify-between items-center mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-sm">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ai-modal-title"
+        >
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-stone-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start gap-3 mb-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-sm shrink-0">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-bold text-stone-900">AI Generate</h3>
+                <div className="min-w-0">
+                  <h3 id="ai-modal-title" className="text-lg font-bold text-stone-900">
+                    AI Generate
+                  </h3>
+                  <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
+                    อธิบายไดอะแกรมที่ต้องการ (flowchart, sequence, state ฯลฯ) AI จะสร้างเป็น Mermaid แล้ววางลงบน Excalidraw ให้
+                  </p>
+                </div>
               </div>
-              <button onClick={() => { setShowAIModal(false); setAIPrompt(""); setAIError(null); }}
-                className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAIModal(false);
+                  setAIPrompt("");
+                  setAIError(null);
+                  setAiMergeMode("append");
+                }}
+                className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors shrink-0"
+                aria-label="ปิด"
+              >
                 <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            <div className="mb-5">
-              <label className="block text-xs font-bold text-stone-500 mb-2 uppercase tracking-wider">Describe your diagram</label>
-              <textarea value={aiPrompt} onChange={(e) => setAIPrompt(e.target.value)}
-                placeholder="e.g., Create a flowchart for Login system with steps: Start, Login Form, Validate, Success..."
-                className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-400 text-stone-900 text-sm transition-all resize-none placeholder-stone-400"
-                rows={4} disabled={isGenerating} />
+            <div className="mb-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <label htmlFor="ai-prompt-input" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                  คำอธิบายไดอะแกรม
+                </label>
+                <span className="text-[10px] text-stone-400 tabular-nums">
+                  {aiPrompt.length}/{AI_PROMPT_MAX}
+                </span>
+              </div>
+              <textarea
+                id="ai-prompt-input"
+                value={aiPrompt}
+                onChange={(e) => setAIPrompt(e.target.value.slice(0, AI_PROMPT_MAX))}
+                placeholder="เช่น สร้าง flowchart ระบบล็อกอิน: เริ่มต้น → ฟอร์ม → ตรวจสอบ → สำเร็จ / ผิดพลาด"
+                className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-400 text-stone-900 text-sm transition-all resize-none placeholder-stone-400 min-h-[108px]"
+                rows={4}
+                disabled={isGenerating}
+              />
+              <p className="text-[10px] text-stone-400 mt-2">กด Esc เพื่อปิดหน้าต่าง</p>
             </div>
+
+            <div className="mb-4">
+              <span className="block text-xs font-bold text-stone-500 mb-2 uppercase tracking-wider">ตัวอย่าง (คลิกเพื่อใส่ในช่อง)</span>
+              <div className="flex flex-col gap-2">
+                {AI_EXAMPLE_PROMPTS.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    disabled={isGenerating}
+                    onClick={() => setAIPrompt(example.slice(0, AI_PROMPT_MAX))}
+                    className="text-left text-xs text-stone-600 bg-stone-50 hover:bg-amber-50 border border-stone-200 hover:border-amber-200 rounded-lg px-3 py-2 transition-colors disabled:opacity-50 leading-snug"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <fieldset className="mb-5 border-0 p-0 m-0">
+              <legend className="block text-xs font-bold text-stone-500 mb-2 uppercase tracking-wider">
+                วางบนแคนวาส
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={isGenerating}
+                  onClick={() => setAiMergeMode("append")}
+                  className={`rounded-xl px-3 py-2.5 text-sm font-semibold border transition-all ${
+                    aiMergeMode === "append"
+                      ? "border-amber-400 bg-amber-50 text-amber-950 shadow-sm"
+                      : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"
+                  }`}
+                >
+                  เพิ่มต่อ
+                  <span className="block text-[10px] font-normal text-stone-500 mt-0.5">คงของเดิม แล้วต่อท้าย</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isGenerating}
+                  onClick={() => setAiMergeMode("replace")}
+                  className={`rounded-xl px-3 py-2.5 text-sm font-semibold border transition-all ${
+                    aiMergeMode === "replace"
+                      ? "border-amber-400 bg-amber-50 text-amber-950 shadow-sm"
+                      : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"
+                  }`}
+                >
+                  แทนที่ทั้งหมด
+                  <span className="block text-[10px] font-normal text-stone-500 mt-0.5">ลบเฉพาะเส้น/รูปบนแคนวาส (ไฟล์แนบคงอยู่)</span>
+                </button>
+              </div>
+            </fieldset>
 
             {aiError && (
               <div className="mb-5 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs flex items-start gap-2 font-medium">
-                <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>{aiError}</span>
               </div>
             )}
 
-            <button onClick={handleAIGenerate} disabled={isGenerating || !aiPrompt.trim()}
-              className="w-full px-4 py-3 bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={handleAIGenerate}
+              disabled={isGenerating || !aiPrompt.trim()}
+              className="w-full px-4 py-3 bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+            >
               {isGenerating ? (
-                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /><span>Generating...</span></>
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>กำลังสร้าง...</span>
+                </>
               ) : (
-                <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg><span>Generate Diagram</span></>
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span>สร้างไดอะแกรม</span>
+                </>
               )}
             </button>
           </div>
@@ -1824,6 +1978,34 @@ export default function RoomClient() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {aiSuccessBanner && (
+        <div
+          className="fixed bottom-6 left-1/2 z-[60] flex max-w-[min(420px,calc(100%-2rem))] -translate-x-1/2 items-start gap-3 rounded-xl border border-stone-700/40 bg-stone-900 px-4 py-3 text-sm text-white shadow-xl"
+          role="status"
+        >
+          <svg
+            className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <p className="min-w-0 flex-1 leading-snug">{aiSuccessBanner}</p>
+          <button
+            type="button"
+            onClick={() => setAiSuccessBanner(null)}
+            className="shrink-0 rounded-lg p-1 text-stone-400 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label="ปิดการแจ้งเตือน"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
     </div>
