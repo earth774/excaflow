@@ -1417,232 +1417,241 @@ export default function RoomClient() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#faf9f6]">
         <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-stone-900"></div>
-          <div className="text-stone-500 font-medium">Loading your space...</div>
+          <div className="relative w-12 h-12">
+            <div className="absolute inset-0 rounded-full border-2 border-stone-200"></div>
+            <div className="absolute inset-0 rounded-full border-2 border-stone-900 border-t-transparent animate-spin"></div>
+          </div>
+          <div className="text-stone-500 font-medium text-sm">Loading canvas...</div>
         </div>
       </div>
     );
   }
 
+  const syncStatusColor = syncStatus.status === "synced" && syncStatus.isInSync !== false;
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#faf9f6]">
-      
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? "w-72" : "w-0"} flex-shrink-0 bg-[#faf9f6] border-r border-stone-200 transition-all duration-300 overflow-hidden flex flex-col relative z-20`}>
-        
+    <div className="flex h-screen w-screen overflow-hidden bg-[#f5f5f0]">
+
+      {/* ─── Sidebar ──────────────────────────────────── */}
+      <div className={`${sidebarOpen ? "w-[280px]" : "w-0"} flex-shrink-0 bg-white border-r border-stone-200/80 transition-all duration-300 overflow-hidden flex flex-col relative z-20`}>
+
         {/* Sidebar Header */}
-        <div className="p-6 border-b border-stone-200/50 flex items-center justify-between">
-          <div className="flex items-center gap-3 overflow-hidden flex-1">
-            <Link 
-              href="/dashboard"
-              className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-600 transition-colors shrink-0"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </Link>
-            <h1 className="font-bold text-lg text-stone-900 truncate">
-              {localRoom.title}
-            </h1>
+        <div className="px-4 py-3 border-b border-stone-100 flex items-center gap-2 min-h-[56px]">
+          <Link href="/dashboard" className="p-1.5 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-700 transition-colors shrink-0" title="Back to Dashboard">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-bold text-sm text-stone-900 truncate">{localRoom.title}</h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className={`w-1.5 h-1.5 rounded-full ${syncStatusColor ? "bg-green-500" : "bg-amber-500"}`}></div>
+              <span className="text-[10px] font-medium text-stone-400">
+                {syncStatusColor ? "Synced" : "Unsaved"} &middot; {new Date(localRoom.updatedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </div>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-600 transition-colors shrink-0">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <button onClick={() => setSidebarOpen(false)} className="p-1.5 hover:bg-stone-100 rounded-lg text-stone-400 hover:text-stone-600 transition-colors shrink-0" title="Close sidebar">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7" />
             </svg>
           </button>
         </div>
 
         {/* Sidebar Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
-          
-          {/* Room Info */}
-          <div>
-            <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-4">Room Info</div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-stone-500 font-medium">Status</span>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                  syncStatus.status === "synced" && syncStatus.isInSync !== false
-                    ? "bg-green-50 text-green-700 border border-green-100"
-                    : "bg-amber-50 text-amber-700 border border-amber-100"
-                }`}>
-                  {syncStatus.status === "synced" && syncStatus.isInSync !== false ? "Synced" : "Unsaved"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-stone-500 font-medium">Last Updated</span>
-                <span className="text-stone-900 font-bold text-xs">
-                  {new Date(localRoom.updatedAt).toLocaleTimeString("th-TH", { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              {!isOwner && (
-                <div className="bg-yellow-50 text-yellow-800 border border-yellow-100 text-xs p-3 rounded-xl font-medium">
-                  You are in read-only mode
-                </div>
-              )}
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+
+          {/* Read-only notice */}
+          {!isOwner && (
+            <div className="flex items-center gap-2 px-3 py-2 mb-3 bg-amber-50 border border-amber-100 rounded-lg">
+              <svg className="w-3.5 h-3.5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              <span className="text-[11px] font-medium text-amber-700">View-only mode</span>
             </div>
-          </div>
+          )}
 
           {/* Share */}
-          <div>
-            <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-4">Share</div>
-            <button
-              onClick={() => {
-                  navigator.clipboard.writeText(window.location.href)
-                    .then(() => alert("Link copied to clipboard"))
-                    .catch(() => alert("Failed to copy link"));
-              }}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-stone-200 hover:border-yellow-400 hover:text-yellow-700 hover:bg-yellow-50 rounded-xl text-sm text-stone-600 font-bold transition-all shadow-sm"
-            >
-                <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-              <span>Copy Link</span>
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href)
+                .then(() => alert("Link copied to clipboard"))
+                .catch(() => alert("Failed to copy link"));
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium group"
+          >
+            <div className="w-7 h-7 rounded-lg bg-stone-100 group-hover:bg-blue-100 flex items-center justify-center transition-colors shrink-0">
+              <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+            </div>
+            <span>Copy Link</span>
+          </button>
 
           {/* Actions */}
           {isOwner && (
-            <div>
-              <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-4">Actions</div>
-              <div className="space-y-3">
-                <button
-                  onClick={() => handleLockedFeature(handlePush)}
-                  disabled={isSyncing}
-                  className={`w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 hover:border-stone-300 hover:bg-stone-50 rounded-xl text-sm text-stone-600 font-bold transition-all shadow-sm ${
-                    !isSubscriptionActive ? "opacity-60 cursor-not-allowed" : ""
-                  }`}
-                >
+            <>
+              <div className="pt-3 pb-1.5 px-3">
+                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Sync</span>
+              </div>
+
+              <button
+                onClick={() => handleLockedFeature(handlePush)}
+                disabled={isSyncing}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
+                  !isSubscriptionActive ? "text-stone-400 cursor-not-allowed" : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+                }`}
+              >
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                  !isSubscriptionActive ? "bg-stone-100" : "bg-stone-100 group-hover:bg-green-100"
+                }`}>
                   {!isSubscriptionActive ? (
-                    <LockIcon className="w-4 h-4 text-stone-400" />
+                    <LockIcon className="w-3.5 h-3.5 text-stone-400" />
+                  ) : isSyncing ? (
+                    <div className="w-3.5 h-3.5 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin" />
                   ) : (
-                    <div className={`w-2 h-2 rounded-full ${isSyncing ? "bg-stone-400 animate-pulse" : "bg-blue-500"}`} />
+                    <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-green-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
                   )}
-                  <span>{isSyncing ? "Saving..." : "Save to Server"}</span>
-                  {!isSubscriptionActive && <span className="ml-auto text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
-                </button>
-                
-                <button
-                  onClick={() => handleLockedFeature(handleCheckSync)}
-                  disabled={isSyncing}
-                  className={`w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 hover:border-stone-300 hover:bg-stone-50 rounded-xl text-sm text-stone-600 font-bold transition-all shadow-sm ${
-                    !isSubscriptionActive ? "opacity-60 cursor-not-allowed" : ""
-                  }`}
-                >
+                </div>
+                <span>{isSyncing ? "Saving..." : "Save to Server"}</span>
+                {!isSubscriptionActive && <span className="ml-auto text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
+              </button>
+
+              <button
+                onClick={() => handleLockedFeature(handleCheckSync)}
+                disabled={isSyncing}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
+                  !isSubscriptionActive ? "text-stone-400 cursor-not-allowed" : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+                }`}
+              >
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                  !isSubscriptionActive ? "bg-stone-100" : "bg-stone-100 group-hover:bg-blue-100"
+                }`}>
                   {!isSubscriptionActive ? (
-                    <LockIcon className="w-4 h-4 text-stone-400" />
+                    <LockIcon className="w-3.5 h-3.5 text-stone-400" />
                   ) : (
-                    <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                   )}
-                  <span>Check Sync Status</span>
-                  {!isSubscriptionActive && <span className="ml-auto text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
-                </button>
+                </div>
+                <span>Check Status</span>
+                {!isSubscriptionActive && <span className="ml-auto text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
+              </button>
 
-                {syncStatus.dbExists && (
-                  <button
-                    onClick={() => handleLockedFeature(handlePull)}
-                    disabled={isSyncing}
-                    className={`w-full flex items-center gap-3 px-4 py-3 bg-white border border-stone-200 hover:border-stone-300 hover:bg-stone-50 rounded-xl text-sm text-stone-600 font-bold transition-all shadow-sm ${
-                      !isSubscriptionActive ? "opacity-60 cursor-not-allowed" : ""
-                    }`}
-                  >
+              {syncStatus.dbExists && (
+                <button
+                  onClick={() => handleLockedFeature(handlePull)}
+                  disabled={isSyncing}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
+                    !isSubscriptionActive ? "text-stone-400 cursor-not-allowed" : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+                  }`}
+                >
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                    !isSubscriptionActive ? "bg-stone-100" : "bg-stone-100 group-hover:bg-purple-100"
+                  }`}>
                     {!isSubscriptionActive ? (
-                      <LockIcon className="w-4 h-4 text-stone-400" />
+                      <LockIcon className="w-3.5 h-3.5 text-stone-400" />
                     ) : (
-                      <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
                       </svg>
                     )}
-                    <span>Pull from Server</span>
-                    {!isSubscriptionActive && <span className="ml-auto text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
-                  </button>
-                )}
+                  </div>
+                  <span>Pull from Server</span>
+                  {!isSubscriptionActive && <span className="ml-auto text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
+                </button>
+              )}
+
+              {/* Tools section */}
+              <div className="pt-3 pb-1.5 px-3">
+                <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Tools</span>
               </div>
-            </div>
+
+              <button
+                onClick={() => { setShowHistoryModal(true); fetchHistory(); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition-colors font-medium group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-stone-100 group-hover:bg-orange-100 flex items-center justify-center transition-colors shrink-0">
+                  <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-orange-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <span>History</span>
+              </button>
+
+              <button
+                onClick={() => handleLockedFeature(() => setShowAIModal(true))}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
+                  !isSubscriptionActive ? "text-stone-400 cursor-not-allowed" : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+                }`}
+              >
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                  !isSubscriptionActive ? "bg-stone-100" : "bg-gradient-to-br from-yellow-400 to-amber-500 shadow-sm"
+                }`}>
+                  {!isSubscriptionActive ? (
+                    <LockIcon className="w-3.5 h-3.5 text-stone-400" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  )}
+                </div>
+                <span>AI Generate</span>
+                {!isSubscriptionActive && <span className="ml-auto text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
+              </button>
+            </>
           )}
 
           {/* File Upload Status */}
           {isOwner && (uploadingFiles.size > 0 || uploadErrors.size > 0) && (
-            <div>
-              <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-4">Uploads</div>
-              <div className="space-y-3">
-                {uploadingFiles.size > 0 && (
-                  <div className="text-xs text-blue-600 flex items-center gap-2 font-medium bg-blue-50 border border-blue-100 p-3 rounded-xl">
-                    <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    Uploading {uploadingFiles.size} file{uploadingFiles.size > 1 ? 's' : ''}...
-                  </div>
-                )}
-                {Array.from(uploadErrors.entries()).map(([fileId, error]) => (
-                  <div key={fileId} className="text-xs text-red-600 flex items-center gap-2 truncate font-medium bg-red-50 border border-red-100 p-3 rounded-xl" title={error}>
-                    <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="truncate">{error}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="pt-3 px-1 space-y-2">
+              {uploadingFiles.size > 0 && (
+                <div className="text-[11px] text-blue-600 flex items-center gap-2 font-medium bg-blue-50 border border-blue-100 px-3 py-2 rounded-lg">
+                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+                  Uploading {uploadingFiles.size} file{uploadingFiles.size > 1 ? "s" : ""}...
+                </div>
+              )}
+              {Array.from(uploadErrors.entries()).map(([fileId, error]) => (
+                <div key={fileId} className="text-[11px] text-red-600 flex items-center gap-2 truncate font-medium bg-red-50 border border-red-100 px-3 py-2 rounded-lg" title={error}>
+                  <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="truncate">{error}</span>
+                </div>
+              ))}
             </div>
           )}
-
         </div>
-
-        {/* Sidebar Footer */}
-        {isOwner && (
-          <div className="p-6 border-t border-stone-200/50 bg-[#faf9f6] space-y-3">
-            <button
-              onClick={() => {
-                setShowHistoryModal(true);
-                fetchHistory();
-              }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 font-bold rounded-full transition-all shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>History</span>
-            </button>
-
-            <button
-              onClick={() => handleLockedFeature(() => setShowAIModal(true))}
-              className={`w-full flex items-center justify-center gap-2 px-4 py-3 bg-stone-900 hover:bg-stone-800 text-white font-bold rounded-full transition-all shadow-lg shadow-stone-900/20 transform hover:-translate-y-0.5 ${
-                !isSubscriptionActive ? "opacity-60 cursor-not-allowed grayscale" : ""
-              }`}
-            >
-              {!isSubscriptionActive ? (
-                <LockIcon className="w-4 h-4" />
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              )}
-              <span>AI Generate</span>
-              {!isSubscriptionActive && <span className="ml-1 text-xs bg-white/20 px-1.5 py-0.5 rounded text-white">PRO</span>}
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 relative h-full overflow-hidden p-4">
-        
-        {/* Floating Top Bar (Controls) */}
+      {/* ─── Main Content ─────────────────────────────── */}
+      <div className="flex-1 relative h-full overflow-hidden">
+
+        {/* Floating sidebar toggle */}
         {!sidebarOpen && (
-          <div className="absolute top-6 left-6 z-10">
+          <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="p-3 bg-white border border-stone-200 rounded-xl shadow-sm hover:bg-stone-50 transition-colors text-stone-600 group"
+              className="p-2.5 bg-white/90 backdrop-blur-sm border border-stone-200 rounded-xl shadow-md hover:bg-white hover:shadow-lg transition-all text-stone-600 hover:text-stone-900"
+              title="Open sidebar"
             >
-              <svg className="w-5 h-5 group-hover:text-stone-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
+            <div className="bg-white/90 backdrop-blur-sm border border-stone-200 rounded-xl shadow-md px-3 py-2 flex items-center gap-2">
+              <div className={`w-1.5 h-1.5 rounded-full ${syncStatusColor ? "bg-green-500" : "bg-amber-500"}`}></div>
+              <span className="text-xs font-medium text-stone-700 max-w-[200px] truncate">{localRoom.title}</span>
+            </div>
           </div>
         )}
 
-        {/* Excalidraw Canvas Container */}
-        <div className="relative w-full h-full rounded-2xl border border-stone-200 shadow-sm bg-white overflow-hidden">
+        {/* Excalidraw Canvas */}
+        <div className="relative w-full h-full bg-white overflow-hidden">
           {isClient && initialScene && (
             <Excalidraw
               key={`excalidraw-${roomId}`}
@@ -1655,188 +1664,159 @@ export default function RoomClient() {
         </div>
       </div>
 
-      {/* Conflict Dialog */}
+      {/* ─── Conflict Dialog ──────────────────────────── */}
       {showConflictDialog && conflictInfo && (
-        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full border border-stone-100 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 mb-4 text-amber-500">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <h3 className="text-lg font-bold text-stone-900">
-                Conflict Detected
-              </h3>
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full border border-stone-100">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-stone-900">Conflict Detected</h3>
+                <p className="text-xs text-stone-500">Local and server data differ</p>
+              </div>
             </div>
-            
-            <p className="text-sm text-stone-600 font-medium mb-6">
-              Your local data doesn't match the server data. Which version would you like to use?
-            </p>
 
-            <div className="space-y-3">
-              <button
-                onClick={handlePush}
-                disabled={isSyncing}
-                className="w-full flex items-center justify-between px-4 py-3 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl transition-all group"
-              >
-                <div className="text-left">
-                  <div className="font-bold text-stone-900 group-hover:text-blue-600 transition-colors">Use Local Data</div>
-                  <div className="text-xs text-stone-500 font-medium">
-                    Updated: {new Date(conflictInfo.localUpdatedAt).toLocaleString("en-US")}
-                  </div>
+            <div className="space-y-2 mb-4">
+              <button onClick={handlePush} disabled={isSyncing}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-stone-50 hover:bg-blue-50 border border-stone-200 hover:border-blue-200 rounded-xl transition-all group">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
                 </div>
-                <div className="w-4 h-4 rounded-full border-2 border-stone-300 group-hover:border-blue-500" />
+                <div className="text-left flex-1">
+                  <div className="text-sm font-bold text-stone-900">Use Local Data</div>
+                  <div className="text-[10px] text-stone-500">{new Date(conflictInfo.localUpdatedAt).toLocaleString("en-US")}</div>
+                </div>
               </button>
 
-              <button
-                onClick={handlePull}
-                disabled={isSyncing}
-                className="w-full flex items-center justify-between px-4 py-3 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-xl transition-all group"
-              >
-                <div className="text-left">
-                  <div className="font-bold text-stone-900 group-hover:text-green-600 transition-colors">Use Server Data</div>
-                  <div className="text-xs text-stone-500 font-medium">
-                    Updated: {new Date(conflictInfo.serverUpdatedAt).toLocaleString("en-US")}
-                  </div>
+              <button onClick={handlePull} disabled={isSyncing}
+                className="w-full flex items-center gap-3 px-4 py-3 bg-stone-50 hover:bg-green-50 border border-stone-200 hover:border-green-200 rounded-xl transition-all group">
+                <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                  </svg>
                 </div>
-                <div className="w-4 h-4 rounded-full border-2 border-stone-300 group-hover:border-green-500" />
+                <div className="text-left flex-1">
+                  <div className="text-sm font-bold text-stone-900">Use Server Data</div>
+                  <div className="text-[10px] text-stone-500">{new Date(conflictInfo.serverUpdatedAt).toLocaleString("en-US")}</div>
+                </div>
               </button>
             </div>
 
-            <button
-              onClick={() => {
-                setShowConflictDialog(false);
-                setConflictInfo(null);
-              }}
-              className="w-full mt-6 py-2 text-sm font-bold text-stone-500 hover:text-stone-700 transition-colors"
-            >
-              Cancel and Decide Later
+            <button onClick={() => { setShowConflictDialog(false); setConflictInfo(null); }}
+              className="w-full py-2 text-xs font-medium text-stone-400 hover:text-stone-600 transition-colors">
+              Decide Later
             </button>
           </div>
         </div>
       )}
 
-      {/* AI Modal */}
+      {/* ─── AI Modal ─────────────────────────────────── */}
       {showAIModal && (
-        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-stone-100 animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-stone-900">
-                AI Generate Diagram
-              </h3>
-              <button 
-                onClick={() => {
-                  setShowAIModal(false);
-                  setAIPrompt("");
-                  setAIError(null);
-                }}
-                className="p-1 hover:bg-stone-100 rounded-full transition-colors"
-              >
-                <svg className="w-5 h-5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-stone-100">
+            <div className="flex justify-between items-center mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-sm">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-stone-900">AI Generate</h3>
+              </div>
+              <button onClick={() => { setShowAIModal(false); setAIPrompt(""); setAIError(null); }}
+                className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors">
+                <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            <div className="mb-6">
-              <label className="block text-sm font-bold text-stone-700 mb-2">
-                Describe the diagram you want
-              </label>
-              <textarea
-                value={aiPrompt}
-                onChange={(e) => setAIPrompt(e.target.value)}
-                placeholder="e.g., Create a flowchart for Login system with 3 steps: Start, Login Form, Success..."
-                className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500 text-stone-900 text-sm transition-all resize-none placeholder-stone-400"
-                rows={4}
-                disabled={isGenerating}
-              />
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-stone-500 mb-2 uppercase tracking-wider">Describe your diagram</label>
+              <textarea value={aiPrompt} onChange={(e) => setAIPrompt(e.target.value)}
+                placeholder="e.g., Create a flowchart for Login system with steps: Start, Login Form, Validate, Success..."
+                className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-400 text-stone-900 text-sm transition-all resize-none placeholder-stone-400"
+                rows={4} disabled={isGenerating} />
             </div>
 
             {aiError && (
-              <div className="mb-6 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm flex items-center gap-2 font-medium">
-                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mb-5 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs flex items-start gap-2 font-medium">
+                <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                {aiError}
+                <span>{aiError}</span>
               </div>
             )}
 
-            <div className="flex gap-3">
-              <button
-                onClick={handleAIGenerate}
-                disabled={isGenerating || !aiPrompt.trim()}
-                className="flex-1 px-4 py-3 bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg shadow-stone-900/20 flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
-              >
-                {isGenerating ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    <span>Generate Diagram</span>
-                  </>
-                )}
-              </button>
-            </div>
+            <button onClick={handleAIGenerate} disabled={isGenerating || !aiPrompt.trim()}
+              className="w-full px-4 py-3 bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+              {isGenerating ? (
+                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /><span>Generating...</span></>
+              ) : (
+                <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg><span>Generate Diagram</span></>
+              )}
+            </button>
           </div>
         </div>
       )}
 
-      {/* History Modal */}
+      {/* ─── History Modal ────────────────────────────── */}
       {showHistoryModal && (
-        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full border border-stone-100 animate-in zoom-in-95 duration-200 flex flex-col max-h-[80vh]">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-stone-900">
-                Version History
-              </h3>
-              <button 
-                onClick={() => setShowHistoryModal(false)}
-                className="p-1 hover:bg-stone-100 rounded-full transition-colors"
-              >
-                <svg className="w-5 h-5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full border border-stone-100 flex flex-col max-h-[80vh]">
+            <div className="flex justify-between items-center mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-bold text-stone-900">Version History</h3>
+              </div>
+              <button onClick={() => setShowHistoryModal(false)} className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors">
+                <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+            <div className="flex-1 overflow-y-auto space-y-2">
               {isLoadingHistory ? (
-                <div className="flex justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin" />
+                <div className="flex justify-center py-10">
+                  <div className="w-6 h-6 border-2 border-stone-200 border-t-stone-700 rounded-full animate-spin" />
                 </div>
               ) : historyList.length === 0 ? (
-                <div className="text-center py-8 text-stone-500">
-                  No history versions found.
+                <div className="text-center py-10">
+                  <svg className="w-10 h-10 text-stone-200 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-stone-400 font-medium">No versions yet</p>
                 </div>
               ) : (
-                historyList.map((version) => (
-                  <div 
-                    key={version.id}
-                    className="flex items-center justify-between p-4 bg-stone-50 border border-stone-100 rounded-xl hover:border-stone-300 transition-colors"
-                  >
-                    <div>
-                      <div className="font-bold text-stone-900">
-                        {new Date(version.createdAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
+                historyList.map((version, i) => (
+                  <div key={version.id}
+                    className="flex items-center justify-between px-4 py-3 bg-stone-50 border border-stone-100 rounded-xl hover:border-stone-200 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-lg bg-white border border-stone-200 flex items-center justify-center text-xs font-bold text-stone-400">
+                        {historyList.length - i}
                       </div>
-                      <div className="text-xs text-stone-500 font-medium">
-                        {new Date(version.createdAt).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "numeric",
-                        })}
+                      <div>
+                        <div className="text-sm font-bold text-stone-900">
+                          {new Date(version.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </div>
+                        <div className="text-[10px] text-stone-500 font-medium">
+                          {new Date(version.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "numeric" })}
+                        </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => restoreVersion(version.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-stone-700 bg-white border border-stone-200 rounded-lg hover:bg-stone-100 hover:text-stone-900 transition-colors"
-                    >
+                    <button onClick={() => restoreVersion(version.id)}
+                      className="px-3 py-1.5 text-xs font-bold text-stone-600 bg-white border border-stone-200 rounded-lg hover:bg-stone-900 hover:text-white hover:border-stone-900 transition-all">
                       Restore
                     </button>
                   </div>
