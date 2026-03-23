@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -19,11 +19,68 @@ import type { RoomIndexEntry, LocalRoom } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 import Modal from "@/components/Modal";
 
+// ─── Virtual Folder System ───────────────────────────────────
+interface VirtualFolder {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  roomIds: string[];
+  createdAt: string;
+}
+
+const FOLDERS_KEY = "excalidraw:folders";
+const FOLDER_COLORS = [
+  { name: "Blue", value: "#3b82f6", bg: "bg-blue-500", light: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
+  { name: "Purple", value: "#8b5cf6", bg: "bg-purple-500", light: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
+  { name: "Green", value: "#22c55e", bg: "bg-green-500", light: "bg-green-50", text: "text-green-700", border: "border-green-200" },
+  { name: "Orange", value: "#f97316", bg: "bg-orange-500", light: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
+  { name: "Pink", value: "#ec4899", bg: "bg-pink-500", light: "bg-pink-50", text: "text-pink-700", border: "border-pink-200" },
+  { name: "Teal", value: "#14b8a6", bg: "bg-teal-500", light: "bg-teal-50", text: "text-teal-700", border: "border-teal-200" },
+  { name: "Yellow", value: "#eab308", bg: "bg-yellow-500", light: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" },
+  { name: "Red", value: "#ef4444", bg: "bg-red-500", light: "bg-red-50", text: "text-red-700", border: "border-red-200" },
+];
+const FOLDER_ICONS = ["folder", "briefcase", "star", "heart", "zap", "code", "globe", "layers"];
+
+function loadFolders(): VirtualFolder[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const data = localStorage.getItem(FOLDERS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch { return []; }
+}
+
+function saveFolders(folders: VirtualFolder[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
+  } catch (e) { console.error("Error saving folders:", e); }
+}
+
+// ─── Icon Components ─────────────────────────────────────────
+function FolderIcon({ icon, className = "w-5 h-5" }: { icon: string; className?: string }) {
+  const icons: Record<string, React.ReactNode> = {
+    folder: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />,
+    briefcase: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />,
+    star: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />,
+    heart: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />,
+    zap: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />,
+    code: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />,
+    globe: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
+    layers: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />,
+  };
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {icons[icon] || icons.folder}
+    </svg>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────
 export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [rooms, setRooms] = useState<RoomIndexEntry[]>([]);
-  const [filteredRooms, setFilteredRooms] = useState<RoomIndexEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isClient, setIsClient] = useState(false);
@@ -32,498 +89,389 @@ export default function Home() {
   const [isPro, setIsPro] = useState(false);
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  const itemsPerPage = 12;
+
+  // Sidebar & Folder state
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [folders, setFolders] = useState<VirtualFolder[]>([]);
+  const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = All Rooms
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+  const [draggedRoomId, setDraggedRoomId] = useState<string | null>(null);
 
   // Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [isEditFolderModalOpen, setIsEditFolderModalOpen] = useState(false);
+  const [isDeleteFolderModalOpen, setIsDeleteFolderModalOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [roomNameInput, setRoomNameInput] = useState("");
   const [roomTagsInput, setRoomTagsInput] = useState("");
+  const [folderNameInput, setFolderNameInput] = useState("");
+  const [folderColorIndex, setFolderColorIndex] = useState(0);
+  const [folderIconIndex, setFolderIconIndex] = useState(0);
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // ─── Sorting Helper ──────────────────────────────────────
+  const sortRooms = useCallback((r: RoomIndexEntry[]) =>
+    [...r].sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()), []);
+
+  // ─── Initialize ──────────────────────────────────────────
   useEffect(() => {
     setIsClient(true);
-
-    // Check auth state
     const checkAuth = async () => {
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
-        if (error || !user) {
-          router.push("/login");
-          return;
-        }
+        if (error || !user) { router.push("/login"); return; }
         setUser(user);
         setIsLoading(false);
         fetchSubscriptionStatus();
-      } catch {
-        router.push("/login");
-      }
+      } catch { router.push("/login"); }
     };
-
     checkAuth();
 
-    // Listen to auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        router.push("/login");
-      } else {
-        setUser(session.user);
-        setIsLoading(false);
-        fetchSubscriptionStatus();
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) { router.push("/login"); }
+      else { setUser(session.user); setIsLoading(false); fetchSubscriptionStatus(); }
     });
 
-    // Load rooms from localStorage index and sort by updatedAt (most recent first)
-    const loadedRooms = loadRoomsIndex().sort((a, b) => {
-      const dateA = new Date(a.updatedAt || a.createdAt).getTime();
-      const dateB = new Date(b.updatedAt || b.createdAt).getTime();
-      return dateB - dateA; // Descending order (newest first)
-    });
+    const loadedRooms = sortRooms(loadRoomsIndex());
     setRooms(loadedRooms);
-    setFilteredRooms(loadedRooms);
-
-    // Optionally sync with server in background
+    setFolders(loadFolders());
     syncRoomsFromServer(loadedRooms);
 
-    // Check if we're returning from Stripe checkout or portal (check URL params)
+    // Stripe callback handling
     const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('session_id');
-    const isSuccess = urlParams.get('success') === 'true';
-    const returnedFromPortal = urlParams.get('returned_from_portal') === 'true';
+    const sessionId = urlParams.get("session_id");
+    const isSuccess = urlParams.get("success") === "true";
+    const returnedFromPortal = urlParams.get("returned_from_portal") === "true";
 
     if (isSuccess && sessionId) {
-      // Confirm the checkout session and update subscription (fallback if webhook didn't fire)
       const confirmSession = async () => {
         try {
-          const response = await authenticatedFetch('/api/stripe/confirm-session', {
-            method: 'POST',
-            body: JSON.stringify({ sessionId }),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            console.log('Session confirmed:', data);
-          } else {
-            const error = await response.json();
-            console.error('Failed to confirm session:', error);
-            // Continue anyway - webhook might have already processed it
-          }
-        } catch (error) {
-          console.error('Error confirming session:', error);
-          // Continue anyway - webhook might have already processed it
-        } finally {
-          // Refresh subscription status after confirming session
-          fetchSubscriptionStatus();
-          // Clean up URL params
-          window.history.replaceState({}, '', '/dashboard');
-        }
+          const response = await authenticatedFetch("/api/stripe/confirm-session", { method: "POST", body: JSON.stringify({ sessionId }) });
+          if (response.ok) { const data = await response.json(); console.log("Session confirmed:", data); }
+        } catch (error) { console.error("Error confirming session:", error); }
+        finally { fetchSubscriptionStatus(); window.history.replaceState({}, "", "/dashboard"); }
       };
-
-      // Small delay to ensure webhook has a chance to process first
       setTimeout(confirmSession, 500);
     } else if (returnedFromPortal) {
-      // Just refresh subscription status when returning from portal
-      setTimeout(() => {
-        fetchSubscriptionStatus();
-        // Clean up URL params
-        window.history.replaceState({}, '', '/dashboard');
-      }, 500);
+      setTimeout(() => { fetchSubscriptionStatus(); window.history.replaceState({}, "", "/dashboard"); }, 500);
     }
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [router]);
+    return () => { subscription.unsubscribe(); };
+  }, [router, sortRooms]);
 
-
-  useEffect(() => {
+  // ─── Filtered Rooms ──────────────────────────────────────
+  const filteredRooms = useMemo(() => {
     let result = rooms;
 
-    // Filter by search query
-    if (searchQuery.trim() !== "") {
-      result = result.filter((room) =>
-        room.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+    // Filter by active folder
+    if (activeFolder === "__uncategorized") {
+      const allAssignedIds = new Set(folders.flatMap((f) => f.roomIds));
+      result = result.filter((r) => !allAssignedIds.has(r.id));
+    } else if (activeFolder) {
+      const folder = folders.find((f) => f.id === activeFolder);
+      if (folder) result = result.filter((r) => folder.roomIds.includes(r.id));
     }
 
-    // Filter by selected tags
+    // Filter by search
+    if (searchQuery.trim()) {
+      result = result.filter((r) => r.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+
+    // Filter by tags
     if (selectedTags.length > 0) {
-      result = result.filter((room) =>
-        room.tags && selectedTags.every((tag) => room.tags.includes(tag))
-      );
+      result = result.filter((r) => r.tags && selectedTags.every((t) => r.tags.includes(t)));
     }
 
-    setFilteredRooms(result);
-    setCurrentPage(1); // Reset to first page on search/filter
-  }, [searchQuery, selectedTags, rooms]);
+    return result;
+  }, [rooms, activeFolder, folders, searchQuery, selectedTags]);
 
-  // Get all unique tags from rooms
-  const allTags = Array.from(
-    new Set(rooms.flatMap((room) => room.tags || []))
-  ).sort();
+  // Reset page on filter change
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, selectedTags, activeFolder]);
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag)
-        ? prev.filter((t) => t !== tag)
-        : [...prev, tag]
-    );
-  };
+  // ─── Derived data ────────────────────────────────────────
+  const allTags = useMemo(() => Array.from(new Set(rooms.flatMap((r) => r.tags || []))).sort(), [rooms]);
 
-  // Pagination Logic
+  const stats = useMemo(() => ({
+    total: rooms.length,
+    synced: rooms.filter((r) => r.status === "synced").length,
+    local: rooms.filter((r) => r.status === "local-only").length,
+  }), [rooms]);
+
   const totalPages = Math.ceil(filteredRooms.length / itemsPerPage);
-  const paginatedRooms = filteredRooms.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const paginatedRooms = filteredRooms.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const activeFolderData = useMemo(() => {
+    if (!activeFolder) return null;
+    if (activeFolder === "__uncategorized") return { id: "__uncategorized", name: "Uncategorized", color: "#78716c", icon: "layers", roomIds: [], createdAt: "" };
+    return folders.find((f) => f.id === activeFolder) || null;
+  }, [activeFolder, folders]);
 
+  // ─── Subscription/Auth handlers ──────────────────────────
   const fetchSubscriptionStatus = async () => {
     try {
       const response = await authenticatedFetch("/api/subscription");
-      if (response.ok) {
-        const data = await response.json();
-        setIsPro(data.isPro);
-      }
-    } catch (error) {
-      console.error("Error fetching subscription:", error);
-    } finally {
-      setIsLoadingSubscription(false);
-    }
+      if (response.ok) { const data = await response.json(); setIsPro(data.isPro); }
+    } catch (error) { console.error("Error fetching subscription:", error); }
+    finally { setIsLoadingSubscription(false); }
   };
 
   const handleManageSubscription = async () => {
     try {
-      const response = await authenticatedFetch("/api/portal", {
-        method: "POST",
-      });
+      const response = await authenticatedFetch("/api/portal", { method: "POST" });
       const { url } = await response.json();
-      if (url) {
-        window.location.href = url;
-      } else {
-        alert("Failed to open subscription portal");
-      }
-    } catch (error) {
-      console.error("Error opening portal:", error);
-      alert("Something went wrong");
-    }
+      if (url) window.location.href = url;
+      else alert("Failed to open subscription portal");
+    } catch (error) { console.error("Error opening portal:", error); alert("Something went wrong"); }
   };
 
   const handleCheckout = async () => {
     setIsCheckingOut(true);
     try {
-      const response = await authenticatedFetch("/api/checkout", {
-        method: "POST",
-        body: JSON.stringify({ priceId: STRIPE_PRICE_ID }),
-      });
-
+      const response = await authenticatedFetch("/api/checkout", { method: "POST", body: JSON.stringify({ priceId: STRIPE_PRICE_ID }) });
       const { url, error } = await response.json();
-
-      if (error) {
-        alert("Checkout failed: " + error);
-        return;
-      }
-
-      if (url) {
-        window.location.href = url;
-      } else {
-        alert("Failed to start checkout.");
-      }
-    } catch (err) {
-      console.error("Checkout error:", err);
-      alert("An unexpected error occurred.");
-    } finally {
-      setIsCheckingOut(false);
-    }
+      if (error) { alert("Checkout failed: " + error); return; }
+      if (url) window.location.href = url;
+      else alert("Failed to start checkout.");
+    } catch (err) { console.error("Checkout error:", err); alert("An unexpected error occurred."); }
+    finally { setIsCheckingOut(false); }
   };
 
+  // ─── Sync ────────────────────────────────────────────────
   const syncRoomsFromServer = async (localRooms: RoomIndexEntry[]) => {
     try {
       const response = await authenticatedFetch("/api/rooms");
       if (!response.ok) return;
       const serverRooms = await response.json();
-
-      // Merge server rooms that don't exist locally
       const localIds = new Set(localRooms.map((r) => r.id));
       const newRooms: RoomIndexEntry[] = [];
 
       for (const serverRoom of serverRooms) {
         if (!localIds.has(serverRoom.id)) {
-          // Room exists on server but not locally - add to local index
           newRooms.push({
-            id: serverRoom.id,
-            title: serverRoom.title,
-            description: serverRoom.description || undefined,
-            status: "synced",
-            createdAt: new Date(serverRoom.createdAt).toISOString(),
+            id: serverRoom.id, title: serverRoom.title, description: serverRoom.description || undefined,
+            status: "synced", createdAt: new Date(serverRoom.createdAt).toISOString(),
             updatedAt: new Date(serverRoom.updatedAt).toISOString(),
-            lastSyncedAt: serverRoom.lastSyncedAt
-              ? new Date(serverRoom.lastSyncedAt).toISOString()
-              : null,
+            lastSyncedAt: serverRoom.lastSyncedAt ? new Date(serverRoom.lastSyncedAt).toISOString() : null,
             tags: serverRoom.tags || [],
           });
-          
-          // Also save full room data to localStorage for draft management
           const localRoom: LocalRoom = {
-            id: serverRoom.id,
-            title: serverRoom.title,
-            description: serverRoom.description || undefined,
-            scene: serverRoom.scene,
-            createdAt: new Date(serverRoom.createdAt).toISOString(),
+            id: serverRoom.id, title: serverRoom.title, description: serverRoom.description || undefined,
+            scene: serverRoom.scene, createdAt: new Date(serverRoom.createdAt).toISOString(),
             updatedAt: new Date(serverRoom.updatedAt).toISOString(),
-            lastSyncedAt: serverRoom.lastSyncedAt
-              ? new Date(serverRoom.lastSyncedAt).toISOString()
-              : null,
-            status: "synced",
-            tags: serverRoom.tags || [],
+            lastSyncedAt: serverRoom.lastSyncedAt ? new Date(serverRoom.lastSyncedAt).toISOString() : null,
+            status: "synced", tags: serverRoom.tags || [],
           };
           await saveLocalRoom(localRoom);
         }
       }
 
       if (newRooms.length > 0) {
-        const updated = [...localRooms, ...newRooms].sort((a, b) => {
-          const dateA = new Date(a.updatedAt || a.createdAt).getTime();
-          const dateB = new Date(b.updatedAt || b.createdAt).getTime();
-          return dateB - dateA; // Descending order (newest first)
-        });
+        const updated = sortRooms([...localRooms, ...newRooms]);
         setRooms(updated);
-        setFilteredRooms(updated);
       }
-    } catch (error) {
-      console.error("Error syncing rooms from server:", error);
-    }
+    } catch (error) { console.error("Error syncing rooms from server:", error); }
   };
 
-  const openCreateModal = () => {
-    setRoomNameInput("");
-    setRoomTagsInput("");
-    setIsCreateModalOpen(true);
-  };
+  // ─── Room CRUD ───────────────────────────────────────────
+  const refreshRooms = useCallback(() => {
+    const updated = sortRooms(loadRoomsIndex());
+    setRooms(updated);
+  }, [sortRooms]);
+
+  const openCreateModal = () => { setRoomNameInput(""); setRoomTagsInput(""); setIsCreateModalOpen(true); };
 
   const handleCreateRoom = async () => {
     const roomName = roomNameInput.trim();
     if (!roomName) return;
-
     setIsSubmitting(true);
     try {
-      // Create room in database immediately (not in localStorage)
       const response = await authenticatedFetch("/api/rooms", {
         method: "POST",
-        body: JSON.stringify({
-          title: roomName,
-          description: undefined,
-          scene: {
-            elements: [],
-            appState: {},
-            files: {},
-          },
-          tags: roomTagsInput.split(",").map(t => t.trim()).filter(Boolean),
-        }),
+        body: JSON.stringify({ title: roomName, description: undefined, scene: { elements: [], appState: {}, files: {} }, tags: roomTagsInput.split(",").map((t) => t.trim()).filter(Boolean) }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to create room");
-      }
-
+      if (!response.ok) throw new Error("Failed to create room");
       const dbRoom = await response.json();
-      
-      // Save to localStorage for draft management
       const localRoom: LocalRoom = {
-        id: dbRoom.id,
-        title: dbRoom.title,
-        description: dbRoom.description || undefined,
-        scene: dbRoom.scene,
-        createdAt: new Date(dbRoom.createdAt).toISOString(),
+        id: dbRoom.id, title: dbRoom.title, description: dbRoom.description || undefined,
+        scene: dbRoom.scene, createdAt: new Date(dbRoom.createdAt).toISOString(),
         updatedAt: new Date(dbRoom.updatedAt).toISOString(),
-        lastSyncedAt: dbRoom.lastSyncedAt
-          ? new Date(dbRoom.lastSyncedAt).toISOString()
-          : null,
-        status: "synced",
-        tags: dbRoom.tags || [],
+        lastSyncedAt: dbRoom.lastSyncedAt ? new Date(dbRoom.lastSyncedAt).toISOString() : null,
+        status: "synced", tags: dbRoom.tags || [],
       };
       await saveLocalRoom(localRoom);
-      
-      // Update rooms list
-      const updatedRooms = loadRoomsIndex().sort((a, b) => {
-        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
-        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
-        return dateB - dateA; // Descending order (newest first)
-      });
-      setRooms(updatedRooms);
-      setFilteredRooms(updatedRooms);
-      
+
+      // Auto-add to active folder if one is selected
+      if (activeFolder && activeFolder !== "__uncategorized") {
+        const updatedFolders = folders.map((f) =>
+          f.id === activeFolder ? { ...f, roomIds: [...f.roomIds, dbRoom.id] } : f
+        );
+        setFolders(updatedFolders);
+        saveFolders(updatedFolders);
+      }
+
+      refreshRooms();
       setIsCreateModalOpen(false);
-      // Redirect to room page
       router.push(`/room/${dbRoom.id}`);
-    } catch (error) {
-      console.error("Error creating room:", error);
-      alert("ไม่สามารถสร้างห้องได้ กรุณาลองอีกครั้ง");
-    } finally {
-      setIsSubmitting(false);
-    }
+    } catch (error) { console.error("Error creating room:", error); alert("ไม่สามารถสร้างห้องได้ กรุณาลองอีกครั้ง"); }
+    finally { setIsSubmitting(false); }
   };
 
   const handleSyncRoom = async (roomId: string) => {
     if (syncingRooms.has(roomId)) return;
-
     setSyncingRooms((prev) => new Set(prev).add(roomId));
-
     try {
-      // Load room data from localStorage
       const localRoom = await loadLocalRoom(roomId);
-      if (!localRoom) {
-        throw new Error("Room not found in localStorage");
-      }
-
-      // Sync to server (push)
+      if (!localRoom) throw new Error("Room not found in localStorage");
       const response = await authenticatedFetch("/api/rooms/sync", {
         method: "POST",
-        body: JSON.stringify({
-          id: localRoom.id,
-          title: localRoom.title,
-          description: localRoom.description,
-          scene: localRoom.scene,
-          updatedAt: localRoom.updatedAt,
-        }),
+        body: JSON.stringify({ id: localRoom.id, title: localRoom.title, description: localRoom.description, scene: localRoom.scene, updatedAt: localRoom.updatedAt }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to sync room");
-      }
-
+      if (!response.ok) throw new Error("Failed to sync room");
       const syncedRoom = await response.json();
-
-      // Mark as synced in localStorage
-      await markRoomAsSynced(
-        roomId,
-        syncedRoom.lastSyncedAt
-          ? new Date(syncedRoom.lastSyncedAt).toISOString()
-          : new Date().toISOString()
-      );
-
-      // Refresh rooms list
-      const updatedRooms = loadRoomsIndex().sort((a, b) => {
-        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
-        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
-        return dateB - dateA; // Descending order (newest first)
-      });
-      setRooms(updatedRooms);
-      setFilteredRooms(updatedRooms);
-    } catch (error) {
-      console.error("Error syncing room:", error);
-      alert("ไม่สามารถ sync ห้องได้ กรุณาลองอีกครั้ง");
-    } finally {
-      setSyncingRooms((prev) => {
-        const next = new Set(prev);
-        next.delete(roomId);
-        return next;
-      });
-    }
+      await markRoomAsSynced(roomId, syncedRoom.lastSyncedAt ? new Date(syncedRoom.lastSyncedAt).toISOString() : new Date().toISOString());
+      refreshRooms();
+    } catch (error) { console.error("Error syncing room:", error); alert("ไม่สามารถ sync ห้องได้ กรุณาลองอีกครั้ง"); }
+    finally { setSyncingRooms((prev) => { const next = new Set(prev); next.delete(roomId); return next; }); }
   };
 
-  const openDeleteModal = (roomId: string) => {
-    setSelectedRoomId(roomId);
-    setIsDeleteModalOpen(true);
-  };
+  const openDeleteModal = (roomId: string) => { setSelectedRoomId(roomId); setIsDeleteModalOpen(true); };
 
   const handleDeleteRoom = async () => {
     if (!selectedRoomId) return;
-
     setIsSubmitting(true);
     try {
-      // Try to delete from database first (always try, regardless of sync status)
       try {
-        const response = await authenticatedFetch(`/api/rooms/${selectedRoomId}`, {
-          method: "DELETE",
-        });
-
-        if (!response.ok) {
-          // If room doesn't exist in DB (404), that's okay - continue with local deletion
-          if (response.status !== 404) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "Failed to delete room from server");
-          }
-        }
-      } catch (error) {
-        console.error("Error deleting room from server:", error);
-        // Continue to delete locally even if server deletion fails
-        // This allows offline deletion
-      }
-
-      // Delete from localStorage
+        const response = await authenticatedFetch(`/api/rooms/${selectedRoomId}`, { method: "DELETE" });
+        if (!response.ok && response.status !== 404) { const errorData = await response.json(); throw new Error(errorData.error || "Failed to delete room from server"); }
+      } catch (error) { console.error("Error deleting room from server:", error); }
       await deleteLocalRoom(selectedRoomId);
-      
-      // Refresh rooms list
-      const updatedRooms = loadRoomsIndex().sort((a, b) => {
-        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
-        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
-        return dateB - dateA; // Descending order (newest first)
-      });
-      setRooms(updatedRooms);
-      setFilteredRooms(updatedRooms);
+
+      // Remove from folders
+      const updatedFolders = folders.map((f) => ({ ...f, roomIds: f.roomIds.filter((id) => id !== selectedRoomId) }));
+      setFolders(updatedFolders);
+      saveFolders(updatedFolders);
+
+      refreshRooms();
       setIsDeleteModalOpen(false);
-    } catch (error) {
-      console.error("Error deleting room:", error);
-      alert("ไม่สามารถลบห้องได้ กรุณาลองอีกครั้ง");
-    } finally {
-      setIsSubmitting(false);
-      setSelectedRoomId(null);
-    }
+    } catch (error) { console.error("Error deleting room:", error); alert("ไม่สามารถลบห้องได้ กรุณาลองอีกครั้ง"); }
+    finally { setIsSubmitting(false); setSelectedRoomId(null); }
   };
 
   const openEditModal = (roomId: string) => {
     const room = rooms.find((r) => r.id === roomId);
-    if (room) {
-      setSelectedRoomId(roomId);
-      setRoomNameInput(room.title);
-      setRoomTagsInput(room.tags ? room.tags.join(", ") : "");
-      setIsEditModalOpen(true);
-    }
+    if (room) { setSelectedRoomId(roomId); setRoomNameInput(room.title); setRoomTagsInput(room.tags ? room.tags.join(", ") : ""); setIsEditModalOpen(true); }
   };
 
   const handleEditRoom = async () => {
     if (!selectedRoomId || !roomNameInput.trim()) return;
-
     setIsSubmitting(true);
     try {
-      const tags = roomTagsInput.split(",").map(t => t.trim()).filter(Boolean);
-      await updateLocalRoomMetadata(selectedRoomId, { 
-        title: roomNameInput.trim(),
-        tags
-      });
-      const updatedRooms = loadRoomsIndex().sort((a, b) => {
-        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
-        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
-        return dateB - dateA; // Descending order (newest first)
-      });
-      setRooms(updatedRooms);
-      setFilteredRooms(updatedRooms);
+      const tags = roomTagsInput.split(",").map((t) => t.trim()).filter(Boolean);
+      await updateLocalRoomMetadata(selectedRoomId, { title: roomNameInput.trim(), tags });
+      refreshRooms();
       setIsEditModalOpen(false);
-    } catch (error) {
-      console.error("Error updating room:", error);
-      alert("Failed to update room name");
-    } finally {
-      setIsSubmitting(false);
-      setSelectedRoomId(null);
+    } catch (error) { console.error("Error updating room:", error); alert("Failed to update room name"); }
+    finally { setIsSubmitting(false); setSelectedRoomId(null); }
+  };
+
+  // ─── Folder CRUD ─────────────────────────────────────────
+  const openFolderModal = () => { setFolderNameInput(""); setFolderColorIndex(0); setFolderIconIndex(0); setIsFolderModalOpen(true); };
+
+  const handleCreateFolder = () => {
+    if (!folderNameInput.trim()) return;
+    const newFolder: VirtualFolder = {
+      id: `folder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: folderNameInput.trim(),
+      color: FOLDER_COLORS[folderColorIndex].value,
+      icon: FOLDER_ICONS[folderIconIndex],
+      roomIds: [],
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [...folders, newFolder];
+    setFolders(updated);
+    saveFolders(updated);
+    setIsFolderModalOpen(false);
+    setActiveFolder(newFolder.id);
+  };
+
+  const openEditFolderModal = (folderId: string) => {
+    const folder = folders.find((f) => f.id === folderId);
+    if (folder) {
+      setEditingFolderId(folderId);
+      setFolderNameInput(folder.name);
+      setFolderColorIndex(FOLDER_COLORS.findIndex((c) => c.value === folder.color) || 0);
+      setFolderIconIndex(FOLDER_ICONS.indexOf(folder.icon) || 0);
+      setIsEditFolderModalOpen(true);
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+  const handleEditFolder = () => {
+    if (!editingFolderId || !folderNameInput.trim()) return;
+    const updated = folders.map((f) =>
+      f.id === editingFolderId
+        ? { ...f, name: folderNameInput.trim(), color: FOLDER_COLORS[folderColorIndex].value, icon: FOLDER_ICONS[folderIconIndex] }
+        : f
+    );
+    setFolders(updated);
+    saveFolders(updated);
+    setIsEditFolderModalOpen(false);
+    setEditingFolderId(null);
   };
 
+  const openDeleteFolderModal = (folderId: string) => { setEditingFolderId(folderId); setIsDeleteFolderModalOpen(true); };
+
+  const handleDeleteFolder = () => {
+    if (!editingFolderId) return;
+    const updated = folders.filter((f) => f.id !== editingFolderId);
+    setFolders(updated);
+    saveFolders(updated);
+    if (activeFolder === editingFolderId) setActiveFolder(null);
+    setIsDeleteFolderModalOpen(false);
+    setEditingFolderId(null);
+  };
+
+  // ─── Drag & Drop ─────────────────────────────────────────
+  const handleDragStart = (roomId: string) => { setDraggedRoomId(roomId); };
+  const handleDragOver = (e: React.DragEvent, folderId: string) => { e.preventDefault(); setDragOverFolder(folderId); };
+  const handleDragLeave = () => { setDragOverFolder(null); };
+  const handleDrop = (folderId: string) => {
+    if (!draggedRoomId || folderId === "__uncategorized") { setDragOverFolder(null); setDraggedRoomId(null); return; }
+    const updated = folders.map((f) => {
+      if (f.id === folderId && !f.roomIds.includes(draggedRoomId)) {
+        return { ...f, roomIds: [...f.roomIds, draggedRoomId] };
+      }
+      return f;
+    });
+    setFolders(updated);
+    saveFolders(updated);
+    setDragOverFolder(null);
+    setDraggedRoomId(null);
+  };
+
+  const removeRoomFromFolder = (roomId: string, folderId: string) => {
+    const updated = folders.map((f) =>
+      f.id === folderId ? { ...f, roomIds: f.roomIds.filter((id) => id !== roomId) } : f
+    );
+    setFolders(updated);
+    saveFolders(updated);
+  };
+
+  // ─── Other ───────────────────────────────────────────────
+  const toggleTag = (tag: string) => { setSelectedTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]); };
+  const handlePageChange = (page: number) => { setCurrentPage(page); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push("/login"); };
+
+  // ─── Get folder color helpers ────────────────────────────
+  const getFolderColorObj = (color: string) => FOLDER_COLORS.find((c) => c.value === color) || FOLDER_COLORS[0];
+
+  // ─── Loading ─────────────────────────────────────────────
   if (!isClient || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#faf9f6]">
@@ -535,622 +483,687 @@ export default function Home() {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
+
+  const allAssignedIds = new Set(folders.flatMap((f) => f.roomIds));
+  const uncategorizedCount = rooms.filter((r) => !allAssignedIds.has(r.id)).length;
 
   return (
     <div className="min-h-screen bg-[#faf9f6] text-[#18181b]">
-      {/* Navbar */}
-      <nav className="bg-[#faf9f6]/80 backdrop-blur-md border-b border-stone-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-20 items-center">
-            <Link href="/" className="flex items-center gap-2 group">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
-                <Image
-                  src="/logo.svg"
-                  alt="Excaflow Logo"
-                  width={32}
-                  height={32}
-                  className="object-cover"
-                />
-              </div>
-              <span className="text-xl font-bold tracking-tight text-stone-900">
-                Excaflow
-              </span>
-            </Link>
+      {/* ─── Navbar ──────────────────────────────────────── */}
+      <nav className="bg-white/80 backdrop-blur-md border-b border-stone-200 sticky top-0 z-50">
+        <div className="px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-xl hover:bg-stone-100 transition-colors text-stone-600"
+                title="Toggle sidebar"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <Link href="/" className="flex items-center gap-2 group">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
+                  <Image src="/logo.svg" alt="Excaflow Logo" width={32} height={32} className="object-cover" />
+                </div>
+                <span className="text-lg font-bold tracking-tight text-stone-900">Excaflow</span>
+              </Link>
+            </div>
+
+            <div className="flex items-center gap-3">
               {!isLoadingSubscription && (
                 isPro ? (
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">
-                      PRO
-                    </span>
-                    <button
-                      onClick={handleManageSubscription}
-                      className="text-sm text-stone-500 hover:text-stone-900 transition-colors font-medium"
-                    >
-                      Manage
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">PRO</span>
+                    <button onClick={handleManageSubscription} className="text-sm text-stone-500 hover:text-stone-900 transition-colors font-medium">Manage</button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-stone-100 text-stone-600 border border-stone-200">
-                      FREE
-                    </span>
-                    <button
-                      onClick={handleCheckout}
-                      disabled={isCheckingOut}
-                      className="text-sm font-bold text-stone-900 bg-yellow-400 hover:bg-yellow-500 px-5 py-2 rounded-full shadow-sm transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isCheckingOut ? "Processing..." : "Upgrade to Pro"}
-                    </button>
-                  </div>
+                  <button onClick={handleCheckout} disabled={isCheckingOut}
+                    className="text-sm font-bold text-stone-900 bg-yellow-400 hover:bg-yellow-500 px-4 py-1.5 rounded-full shadow-sm transition-all disabled:opacity-50">
+                    {isCheckingOut ? "..." : "Upgrade"}
+                  </button>
                 )
               )}
-              <div className="hidden md:flex items-center gap-2 text-sm text-stone-600 bg-white px-4 py-2 rounded-full border border-stone-200 shadow-sm">
+              <div className="hidden md:flex items-center gap-2 text-sm text-stone-600 bg-stone-50 px-3 py-1.5 rounded-full border border-stone-200">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                {user.email}
+                <span className="max-w-[180px] truncate">{user.email}</span>
               </div>
-              <button
-                onClick={handleLogout}
-                className="text-stone-500 hover:text-stone-900 font-medium text-sm transition-colors"
-              >
-                Sign out
+              <button onClick={handleLogout} className="text-stone-400 hover:text-stone-600 p-2 rounded-xl hover:bg-stone-100 transition-colors" title="Sign out">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
               </button>
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero Section */}
-        <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div>
-            <h1 className="text-4xl font-bold text-stone-900 tracking-tight mb-2">Your Boards</h1>
-            <p className="text-lg text-stone-500 font-medium max-w-lg">Manage your visual specifications and share them with your team.</p>
-          </div>
-          <button
-            onClick={openCreateModal}
-            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-bold rounded-full shadow-lg shadow-stone-900/10 text-white bg-stone-900 hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-900 transition-all transform hover:-translate-y-0.5"
-          >
-            <svg className="-ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            Create New Room
-          </button>
-        </div>
-
-        {/* Search and Controls */}
-        <div className="mb-10 bg-white border border-stone-200 rounded-2xl p-2 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-2">
-          <div className="relative flex-1 w-full sm:w-auto">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-stone-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-              </svg>
+      <div className="flex">
+        {/* ─── Sidebar ──────────────────────────────────── */}
+        <aside className={`${sidebarOpen ? "w-64" : "w-0"} transition-all duration-300 overflow-hidden flex-shrink-0 border-r border-stone-200 bg-white min-h-[calc(100vh-64px)] sticky top-16`}>
+          <div className="w-64 p-4 flex flex-col h-full">
+            {/* Quick Stats */}
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              <div className="text-center p-2 rounded-xl bg-stone-50">
+                <div className="text-lg font-bold text-stone-900">{stats.total}</div>
+                <div className="text-[10px] font-medium text-stone-500 uppercase">Total</div>
+              </div>
+              <div className="text-center p-2 rounded-xl bg-green-50">
+                <div className="text-lg font-bold text-green-700">{stats.synced}</div>
+                <div className="text-[10px] font-medium text-green-600 uppercase">Synced</div>
+              </div>
+              <div className="text-center p-2 rounded-xl bg-amber-50">
+                <div className="text-lg font-bold text-amber-700">{stats.local}</div>
+                <div className="text-[10px] font-medium text-amber-600 uppercase">Local</div>
+              </div>
             </div>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search your rooms..."
-              className="block w-full pl-11 pr-4 py-2.5 border-none rounded-xl leading-5 bg-transparent placeholder-stone-400 focus:outline-none focus:ring-0 sm:text-sm font-medium text-stone-900"
-            />
-          </div>
 
-          <div className="flex items-center bg-stone-100 rounded-xl p-1 gap-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-lg transition-all flex items-center gap-2 ${
-                viewMode === 'grid'
-                  ? 'bg-white text-stone-900 shadow-sm'
-                  : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50'
-              }`}
-              title="Grid View"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-              </svg>
-              <span className="text-xs font-bold hidden sm:inline">Grid</span>
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-all flex items-center gap-2 ${
-                viewMode === 'list'
-                  ? 'bg-white text-stone-900 shadow-sm'
-                  : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50'
-              }`}
-              title="List View"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-              <span className="text-xs font-bold hidden sm:inline">List</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Tag Filters */}
-        {allTags.length > 0 && (
-          <div className="mb-8 flex flex-wrap gap-2 items-center">
-            <span className="text-sm font-medium text-stone-500 mr-2">Filter by tags:</span>
-            {allTags.map((tag) => (
+            {/* Navigation */}
+            <div className="space-y-1 mb-4">
               <button
-                key={tag}
-                onClick={() => toggleTag(tag)}
-                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold transition-all ${
-                  selectedTags.includes(tag)
-                    ? "bg-stone-900 text-white shadow-md transform scale-105"
-                    : "bg-white text-stone-600 border border-stone-200 hover:border-stone-400 hover:bg-stone-50"
+                onClick={() => setActiveFolder(null)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeFolder === null ? "bg-stone-900 text-white shadow-md" : "text-stone-700 hover:bg-stone-100"
                 }`}
               >
-                {tag}
-                {selectedTags.includes(tag) && (
-                  <svg className="ml-1.5 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
-                )}
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <span>All Rooms</span>
+                <span className="ml-auto text-xs opacity-60">{rooms.length}</span>
               </button>
-            ))}
-            {selectedTags.length > 0 && (
-              <button
-                onClick={() => setSelectedTags([])}
-                className="ml-2 text-xs font-medium text-stone-400 hover:text-stone-600 underline"
-              >
-                Clear all
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Rooms Grid */}
-        {filteredRooms.length === 0 ? (
-          <div className="text-center py-24 bg-white rounded-3xl border border-dashed border-stone-200">
-            <div className="mx-auto h-24 w-24 text-stone-200 mb-6">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
             </div>
-            <h3 className="mt-2 text-xl font-bold text-stone-900">No rooms found</h3>
-            <p className="mt-2 text-stone-500 font-medium">
-              {searchQuery ? "Try adjusting your search terms." : "Get started by creating a new room."}
-            </p>
-            {!searchQuery && (
-              <div className="mt-8">
-                <button
-                  onClick={openCreateModal}
-                  className="inline-flex items-center px-6 py-3 border border-stone-200 shadow-sm text-sm font-bold rounded-full text-stone-900 bg-white hover:bg-stone-50 hover:border-yellow-400 transition-all"
-                >
-                  <svg className="-ml-1 mr-2 h-5 w-5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+
+            {/* Projects */}
+            <div className="mb-2">
+              <div className="flex items-center justify-between px-3 mb-2">
+                <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Projects</span>
+                <button onClick={openFolderModal} className="p-1 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors" title="New project">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  Create Room
                 </button>
               </div>
-            )}
-          </div>
-        ) : (
-          <>
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {paginatedRooms.map((room) => {
-                  const isSyncing = syncingRooms.has(room.id);
-                  const lastSynced = room.lastSyncedAt
-                    ? new Date(room.lastSyncedAt).toLocaleString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "numeric",
-                      })
-                    : null;
 
+              <div className="space-y-1">
+                {folders.map((folder) => {
+                  const colorObj = getFolderColorObj(folder.color);
                   return (
                     <div
-                      key={room.id}
-                      className="group bg-white rounded-2xl border border-stone-100 shadow-sm hover:shadow-xl hover:shadow-stone-200/50 hover:border-yellow-400/50 transition-all duration-300 flex flex-col overflow-hidden"
+                      key={folder.id}
+                      className={`group relative ${dragOverFolder === folder.id ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
+                      onDragOver={(e) => handleDragOver(e, folder.id)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={() => handleDrop(folder.id)}
                     >
-                      <div className="p-6 flex-1">
-                        <div className="flex items-start justify-between mb-6">
-                          <div className="p-3 bg-stone-50 rounded-xl text-stone-900 group-hover:bg-yellow-400 group-hover:text-stone-900 transition-colors duration-300">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M4 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {room.status === "local-only" ? (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
-                                Local
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-100">
-                                Synced
-                              </span>
-                            )}
-                          </div>
+                      <button
+                        onClick={() => setActiveFolder(folder.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                          activeFolder === folder.id
+                            ? `${colorObj.light} ${colorObj.text} shadow-sm ${colorObj.border} border`
+                            : "text-stone-700 hover:bg-stone-100"
+                        }`}
+                      >
+                        <div className="flex-shrink-0" style={{ color: folder.color }}>
+                          <FolderIcon icon={folder.icon} className="w-5 h-5" />
                         </div>
-                        
-                        <h3 className="text-xl font-bold text-stone-900 mb-2 truncate" title={room.title}>
-                          {room.title}
-                        </h3>
-                        
-                        {room.tags && room.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {room.tags.map((tag, i) => (
-                              <span key={i} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-stone-100 text-stone-600">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        
-                        <div className="text-sm text-stone-500 flex items-center gap-2 font-medium">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        <span className="truncate">{folder.name}</span>
+                        <span className="ml-auto text-xs opacity-60">{folder.roomIds.length}</span>
+                      </button>
+                      {/* Folder context buttons */}
+                      <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5">
+                        <button onClick={(e) => { e.stopPropagation(); openEditFolderModal(folder.id); }}
+                          className="p-1 rounded-md hover:bg-stone-200 text-stone-400 hover:text-stone-600 transition-colors">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
-                          {lastSynced ? `Synced ${lastSynced}` : "Not synced yet"}
-                        </div>
-                      </div>
-
-                      <div className="px-6 py-4 bg-stone-50 border-t border-stone-100 flex items-center justify-between">
-                        <Link
-                          href={`/room/${room.id}`}
-                          className="text-sm font-bold text-stone-900 hover:text-yellow-600 transition-colors flex items-center gap-1"
-                        >
-                          Open Room <span className="text-lg">&rarr;</span>
-                        </Link>
-                        
-                        <div className="flex items-center gap-1">
-                          {room.status === "local-only" && (
-                            <button
-                              onClick={() => handleSyncRoom(room.id)}
-                              disabled={isSyncing}
-                              className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Sync to server"
-                            >
-                              <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                              </svg>
-                            </button>
-                          )}
-                          
-                          <button
-                            onClick={() => openEditModal(room.id)}
-                            className="p-2 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded-lg transition-colors"
-                            title="Rename"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                            </svg>
-                          </button>
-                          
-                          <button
-                            onClick={() => openDeleteModal(room.id)}
-                            className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                            </svg>
-                          </button>
-                        </div>
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); openDeleteFolderModal(folder.id); }}
+                          className="p-1 rounded-md hover:bg-red-100 text-stone-400 hover:text-red-600 transition-colors">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   );
                 })}
-              </div>
-            ) : (
-              <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
-                <table className="min-w-full divide-y divide-stone-100">
-                  <thead className="bg-stone-50">
-                    <tr>
-                      <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-stone-500 uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-stone-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-stone-500 uppercase tracking-wider">
-                        Last Synced
-                      </th>
-                      <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-stone-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-stone-100">
-                    {paginatedRooms.map((room) => {
-                      const isSyncing = syncingRooms.has(room.id);
-                      const lastSynced = room.lastSyncedAt
-                        ? new Date(room.lastSyncedAt).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "numeric",
-                          })
-                        : null;
 
-                      return (
-                        <tr key={room.id} className="hover:bg-stone-50 transition-colors">
-                          <td className="px-6 py-5 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10 bg-stone-100 rounded-lg flex items-center justify-center text-stone-600">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M4 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                              </div>
-                              <div className="ml-4">
-                                <Link href={`/room/${room.id}`} className="text-sm font-bold text-stone-900 hover:text-yellow-600">
-                                  {room.title}
-                                </Link>
-                              </div>
+                {/* Uncategorized */}
+                {uncategorizedCount > 0 && (
+                  <button
+                    onClick={() => setActiveFolder("__uncategorized")}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                      activeFolder === "__uncategorized" ? "bg-stone-100 text-stone-700 shadow-sm" : "text-stone-500 hover:bg-stone-100"
+                    }`}
+                  >
+                    <svg className="w-5 h-5 flex-shrink-0 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                    <span>Uncategorized</span>
+                    <span className="ml-auto text-xs opacity-60">{uncategorizedCount}</span>
+                  </button>
+                )}
+
+                {folders.length === 0 && (
+                  <div className="px-3 py-4 text-center">
+                    <p className="text-xs text-stone-400 mb-2">No projects yet</p>
+                    <button onClick={openFolderModal}
+                      className="text-xs font-medium text-stone-500 hover:text-stone-700 underline underline-offset-2">
+                      Create your first project
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* ─── Main Content ─────────────────────────────── */}
+        <main className="flex-1 min-w-0 px-6 lg:px-10 py-8">
+          {/* Page Header */}
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                {activeFolderData && activeFolder !== "__uncategorized" && (
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: activeFolderData.color + "20", color: activeFolderData.color }}>
+                    <FolderIcon icon={activeFolderData.icon} className="w-5 h-5" />
+                  </div>
+                )}
+                <h1 className="text-2xl font-bold text-stone-900 tracking-tight">
+                  {activeFolderData ? activeFolderData.name : "All Rooms"}
+                </h1>
+              </div>
+              <p className="text-sm text-stone-500 font-medium">
+                {filteredRooms.length} room{filteredRooms.length !== 1 ? "s" : ""}
+                {searchQuery && ` matching "${searchQuery}"`}
+                {selectedTags.length > 0 && ` tagged ${selectedTags.join(", ")}`}
+              </p>
+            </div>
+            <button onClick={openCreateModal}
+              className="inline-flex items-center px-5 py-2.5 text-sm font-bold rounded-xl shadow-sm text-white bg-stone-900 hover:bg-stone-800 transition-all hover:shadow-md">
+              <svg className="-ml-0.5 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              New Room
+            </button>
+          </div>
+
+          {/* Search and Controls */}
+          <div className="mb-6 flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <svg className="h-4 w-4 text-stone-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search rooms..."
+                className="block w-full pl-10 pr-4 py-2.5 border border-stone-200 rounded-xl bg-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-300 text-sm font-medium text-stone-900" />
+            </div>
+
+            <div className="flex items-center bg-white border border-stone-200 rounded-xl p-1 gap-1">
+              <button onClick={() => setViewMode("grid")}
+                className={`p-2 rounded-lg transition-all flex items-center gap-1.5 ${viewMode === "grid" ? "bg-stone-900 text-white shadow-sm" : "text-stone-500 hover:text-stone-700"}`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+                <span className="text-xs font-bold hidden sm:inline">Grid</span>
+              </button>
+              <button onClick={() => setViewMode("list")}
+                className={`p-2 rounded-lg transition-all flex items-center gap-1.5 ${viewMode === "list" ? "bg-stone-900 text-white shadow-sm" : "text-stone-500 hover:text-stone-700"}`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                <span className="text-xs font-bold hidden sm:inline">List</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tag Filters */}
+          {allTags.length > 0 && (
+            <div className="mb-6 flex flex-wrap gap-2 items-center">
+              <span className="text-xs font-medium text-stone-400 mr-1">Tags:</span>
+              {allTags.map((tag) => (
+                <button key={tag} onClick={() => toggleTag(tag)}
+                  className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    selectedTags.includes(tag)
+                      ? "bg-stone-900 text-white shadow-sm"
+                      : "bg-white text-stone-600 border border-stone-200 hover:border-stone-300"
+                  }`}>
+                  {tag}
+                  {selectedTags.includes(tag) && (
+                    <svg className="ml-1 w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+              {selectedTags.length > 0 && (
+                <button onClick={() => setSelectedTags([])} className="text-xs text-stone-400 hover:text-stone-600 underline underline-offset-2 ml-1">
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Room Cards */}
+          {filteredRooms.length === 0 ? (
+            <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-stone-200">
+              <svg className="mx-auto h-16 w-16 text-stone-200 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              <h3 className="text-lg font-bold text-stone-900 mb-1">No rooms found</h3>
+              <p className="text-sm text-stone-500 mb-6">{searchQuery ? "Try adjusting your search." : "Create your first room to get started."}</p>
+              {!searchQuery && (
+                <button onClick={openCreateModal}
+                  className="inline-flex items-center px-5 py-2.5 border border-stone-200 text-sm font-bold rounded-xl text-stone-900 bg-white hover:bg-stone-50 hover:border-yellow-400 transition-all shadow-sm">
+                  <svg className="-ml-0.5 mr-2 h-4 w-4 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                  </svg>
+                  Create Room
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {paginatedRooms.map((room) => {
+                    const isSyncing = syncingRooms.has(room.id);
+                    const lastSynced = room.lastSyncedAt
+                      ? new Date(room.lastSyncedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "numeric" })
+                      : null;
+                    const updatedAt = new Date(room.updatedAt || room.createdAt).toLocaleString("en-US", { month: "short", day: "numeric" });
+                    const roomFolders = folders.filter((f) => f.roomIds.includes(room.id));
+
+                    return (
+                      <div key={room.id}
+                        draggable
+                        onDragStart={() => handleDragStart(room.id)}
+                        className="group bg-white rounded-2xl border border-stone-200 hover:border-stone-300 hover:shadow-lg transition-all duration-200 flex flex-col overflow-hidden cursor-grab active:cursor-grabbing">
+                        {/* Card top accent */}
+                        <div className="h-1 w-full" style={{ background: roomFolders.length > 0 ? roomFolders[0].color : "#e7e5e4" }}></div>
+
+                        <div className="p-5 flex-1">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              {room.status === "local-only" ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 uppercase">Local</span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-green-50 text-green-700 border border-green-100 uppercase">Synced</span>
+                              )}
+                              {roomFolders.map((f) => (
+                                <span key={f.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border" style={{
+                                  backgroundColor: f.color + "10", color: f.color, borderColor: f.color + "30"
+                                }}>
+                                  <FolderIcon icon={f.icon} className="w-3 h-3" />
+                                  {f.name}
+                                </span>
+                              ))}
                             </div>
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap">
-                            {room.status === "local-only" ? (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
-                                Local
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-100">
-                                Synced
-                              </span>
+                            <span className="text-[11px] text-stone-400 font-medium">{updatedAt}</span>
+                          </div>
+
+                          <Link href={`/room/${room.id}`} className="block group/link">
+                            <h3 className="text-base font-bold text-stone-900 mb-2 truncate group-hover/link:text-yellow-600 transition-colors" title={room.title}>
+                              {room.title}
+                            </h3>
+                          </Link>
+
+                          {room.tags && room.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {room.tags.map((tag, i) => (
+                                <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-stone-100 text-stone-500">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="text-xs text-stone-400 flex items-center gap-1.5 font-medium">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {lastSynced ? `Synced ${lastSynced}` : "Not synced yet"}
+                          </div>
+                        </div>
+
+                        <div className="px-5 py-3 bg-stone-50/50 border-t border-stone-100 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link href={`/room/${room.id}`} className="text-xs font-bold text-stone-900 hover:text-yellow-600 transition-colors flex items-center gap-1">
+                            Open <span>&rarr;</span>
+                          </Link>
+                          <div className="flex items-center gap-0.5">
+                            {room.status === "local-only" && (
+                              <button onClick={() => handleSyncRoom(room.id)} disabled={isSyncing}
+                                className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Sync">
+                                <svg className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                              </button>
                             )}
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap text-sm text-stone-500 font-medium">
-                            {lastSynced || "Not synced yet"}
-                          </td>
-                          <td className="px-6 py-5 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex items-center justify-end gap-3">
-                              <Link
-                                href={`/room/${room.id}`}
-                                className="text-stone-900 hover:text-yellow-600 font-bold mr-2"
-                              >
-                                Open
+                            {activeFolder && activeFolder !== "__uncategorized" && (
+                              <button onClick={() => removeRoomFromFolder(room.id, activeFolder)}
+                                className="p-1.5 text-stone-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors" title="Remove from project">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                </svg>
+                              </button>
+                            )}
+                            <button onClick={() => openEditModal(room.id)} className="p-1.5 text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded-lg transition-colors" title="Edit">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button onClick={() => openDeleteModal(room.id)} className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* List View */
+                <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+                  <table className="min-w-full divide-y divide-stone-100">
+                    <thead className="bg-stone-50">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-[10px] font-bold text-stone-400 uppercase tracking-wider">Name</th>
+                        <th className="px-5 py-3 text-left text-[10px] font-bold text-stone-400 uppercase tracking-wider">Project</th>
+                        <th className="px-5 py-3 text-left text-[10px] font-bold text-stone-400 uppercase tracking-wider">Status</th>
+                        <th className="px-5 py-3 text-left text-[10px] font-bold text-stone-400 uppercase tracking-wider">Last Synced</th>
+                        <th className="px-5 py-3 text-right text-[10px] font-bold text-stone-400 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {paginatedRooms.map((room) => {
+                        const isSyncing = syncingRooms.has(room.id);
+                        const lastSynced = room.lastSyncedAt ? new Date(room.lastSyncedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "numeric" }) : null;
+                        const roomFolders = folders.filter((f) => f.roomIds.includes(room.id));
+
+                        return (
+                          <tr key={room.id} className="hover:bg-stone-50 transition-colors" draggable onDragStart={() => handleDragStart(room.id)}>
+                            <td className="px-5 py-4">
+                              <Link href={`/room/${room.id}`} className="text-sm font-bold text-stone-900 hover:text-yellow-600 transition-colors">
+                                {room.title}
                               </Link>
-                              
-                              {room.status === "local-only" && (
-                                <button
-                                  onClick={() => handleSyncRoom(room.id)}
-                                  disabled={isSyncing}
-                                  className="text-stone-400 hover:text-blue-600 transition-colors"
-                                  title="Sync to server"
-                                >
-                                  <svg className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                              {room.tags && room.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {room.tags.map((tag, i) => (
+                                    <span key={i} className="text-[10px] font-medium text-stone-400">{tag}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-5 py-4">
+                              <div className="flex flex-wrap gap-1">
+                                {roomFolders.length > 0 ? roomFolders.map((f) => (
+                                  <span key={f.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium" style={{ backgroundColor: f.color + "15", color: f.color }}>
+                                    <FolderIcon icon={f.icon} className="w-3 h-3" />{f.name}
+                                  </span>
+                                )) : <span className="text-xs text-stone-400">-</span>}
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              {room.status === "local-only" ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 uppercase">Local</span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-green-50 text-green-700 uppercase">Synced</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-4 text-xs text-stone-500 font-medium">{lastSynced || "Not yet"}</td>
+                            <td className="px-5 py-4 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Link href={`/room/${room.id}`} className="text-xs font-bold text-stone-900 hover:text-yellow-600 mr-2">Open</Link>
+                                {room.status === "local-only" && (
+                                  <button onClick={() => handleSyncRoom(room.id)} disabled={isSyncing}
+                                    className="p-1.5 text-stone-400 hover:text-blue-600 rounded-lg transition-colors" title="Sync">
+                                    <svg className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                  </button>
+                                )}
+                                <button onClick={() => openEditModal(room.id)} className="p-1.5 text-stone-400 hover:text-stone-600 rounded-lg transition-colors" title="Edit">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                   </svg>
                                 </button>
-                              )}
-                              
-                              <button
-                                onClick={() => openEditModal(room.id)}
-                                className="text-stone-400 hover:text-stone-600 transition-colors"
-                                title="Rename"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                </svg>
-                              </button>
-                              
-                              <button
-                                onClick={() => openDeleteModal(room.id)}
-                                className="text-stone-400 hover:text-red-600 transition-colors"
-                                title="Delete"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                                <button onClick={() => openDeleteModal(room.id)} className="p-1.5 text-stone-400 hover:text-red-600 rounded-lg transition-colors" title="Delete">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="mt-12 flex justify-center">
-                <nav className="relative z-0 inline-flex rounded-full shadow-sm -space-x-px" aria-label="Pagination">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-3 py-2 rounded-l-full border border-stone-200 bg-white text-sm font-medium text-stone-500 hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="sr-only">Previous</span>
-                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => handlePageChange(page)}
-                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                        currentPage === page
-                          ? "z-10 bg-yellow-400 border-yellow-400 text-stone-900 font-bold"
-                          : "bg-white border-stone-200 text-stone-500 hover:bg-stone-50"
-                      }`}
-                    >
-                      {page}
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="mt-8 flex justify-center">
+                  <nav className="inline-flex items-center gap-1" aria-label="Pagination">
+                    <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}
+                      className="p-2 rounded-lg border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
                     </button>
-                  ))}
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-3 py-2 rounded-r-full border border-stone-200 bg-white text-sm font-medium text-stone-500 hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="sr-only">Next</span>
-                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                </nav>
-              </div>
-            )}
-          </>
-        )}
-        {/* Create Room Modal */}
-        <Modal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          title="Create New Room"
-          footer={
-            <>
-              <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateRoom}
-                disabled={isSubmitting || !roomNameInput.trim()}
-                className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-lg hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? "Creating..." : "Create Room"}
-              </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button key={page} onClick={() => handlePageChange(page)}
+                        className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                          currentPage === page ? "bg-stone-900 text-white" : "border border-stone-200 bg-white text-stone-500 hover:bg-stone-50"
+                        }`}>
+                        {page}
+                      </button>
+                    ))}
+                    <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}
+                      className="p-2 rounded-lg border border-stone-200 bg-white text-stone-500 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </nav>
+                </div>
+              )}
             </>
-          }
-        >
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="roomName" className="block text-sm font-medium text-stone-700 mb-1">
-                Room Name
-              </label>
-              <input
-                type="text"
-                id="roomName"
-                value={roomNameInput}
-                onChange={(e) => setRoomNameInput(e.target.value)}
-                placeholder="e.g. Project Alpha"
-                className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 transition-all duration-200 ease-in-out sm:text-sm font-medium"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && roomNameInput.trim()) {
-                    handleCreateRoom();
-                  }
-                }}
-              />
-            </div>
-            <div>
-              <label htmlFor="roomTags" className="block text-sm font-medium text-stone-700 mb-1">
-                Tags
-              </label>
-              <input
-                type="text"
-                id="roomTags"
-                value={roomTagsInput}
-                onChange={(e) => setRoomTagsInput(e.target.value)}
-                placeholder="e.g. design, marketing, urgent (comma separated)"
-                className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 transition-all duration-200 ease-in-out sm:text-sm font-medium"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleCreateRoom();
-                  }
-                }}
-              />
-              <p className="mt-1 text-xs text-stone-500">Separate multiple tags with commas</p>
-            </div>
-          </div>
-        </Modal>
+          )}
+        </main>
+      </div>
 
-        {/* Edit Room Modal */}
-        <Modal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          title="Rename Room"
-          footer={
-            <>
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEditRoom}
-                disabled={isSubmitting || !roomNameInput.trim()}
-                className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-lg hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? "Saving..." : "Save Changes"}
-              </button>
-            </>
-          }
-        >
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="editRoomName" className="block text-sm font-medium text-stone-700 mb-1">
-                Room Name
-              </label>
-              <input
-                type="text"
-                id="editRoomName"
-                value={roomNameInput}
-                onChange={(e) => setRoomNameInput(e.target.value)}
-                className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 transition-all duration-200 ease-in-out sm:text-sm font-medium"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && roomNameInput.trim()) {
-                    handleEditRoom();
-                  }
-                }}
-              />
-            </div>
-            <div>
-              <label htmlFor="editRoomTags" className="block text-sm font-medium text-stone-700 mb-1">
-                Tags
-              </label>
-              <input
-                type="text"
-                id="editRoomTags"
-                value={roomTagsInput}
-                onChange={(e) => setRoomTagsInput(e.target.value)}
-                placeholder="e.g. design, marketing, urgent (comma separated)"
-                className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 transition-all duration-200 ease-in-out sm:text-sm font-medium"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleEditRoom();
-                  }
-                }}
-              />
-              <p className="mt-1 text-xs text-stone-500">Separate multiple tags with commas</p>
-            </div>
-          </div>
-        </Modal>
+      {/* ─── Modals ─────────────────────────────────────── */}
 
-        {/* Delete Room Modal */}
-        <Modal
-          isOpen={isDeleteModalOpen}
-          onClose={() => setIsDeleteModalOpen(false)}
-          title="Delete Room"
-          footer={
-            <>
-              <button
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-stone-500"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteRoom}
-                disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? "Deleting..." : "Delete Room"}
-              </button>
-            </>
-          }
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-stone-500">
-              Are you sure you want to delete this room? This action cannot be undone.
-            </p>
+      {/* Create Room Modal */}
+      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Create New Room"
+        footer={<>
+          <button onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
+          <button onClick={handleCreateRoom} disabled={isSubmitting || !roomNameInput.trim()}
+            className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed">
+            {isSubmitting ? "Creating..." : "Create Room"}
+          </button>
+        </>}>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="roomName" className="block text-sm font-medium text-stone-700 mb-1">Room Name</label>
+            <input type="text" id="roomName" value={roomNameInput} onChange={(e) => setRoomNameInput(e.target.value)}
+              placeholder="e.g. Project Alpha" autoFocus
+              className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 sm:text-sm font-medium"
+              onKeyDown={(e) => { if (e.key === "Enter" && roomNameInput.trim()) handleCreateRoom(); }} />
           </div>
-        </Modal>
-      </main>
+          <div>
+            <label htmlFor="roomTags" className="block text-sm font-medium text-stone-700 mb-1">Tags</label>
+            <input type="text" id="roomTags" value={roomTagsInput} onChange={(e) => setRoomTagsInput(e.target.value)}
+              placeholder="e.g. design, marketing (comma separated)"
+              className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 sm:text-sm font-medium"
+              onKeyDown={(e) => { if (e.key === "Enter") handleCreateRoom(); }} />
+            <p className="mt-1 text-xs text-stone-400">Separate multiple tags with commas</p>
+          </div>
+          {activeFolder && activeFolder !== "__uncategorized" && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl text-xs text-blue-700">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Room will be added to &quot;{activeFolderData?.name}&quot; project
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Edit Room Modal */}
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit Room"
+        footer={<>
+          <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
+          <button onClick={handleEditRoom} disabled={isSubmitting || !roomNameInput.trim()}
+            className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed">
+            {isSubmitting ? "Saving..." : "Save Changes"}
+          </button>
+        </>}>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="editRoomName" className="block text-sm font-medium text-stone-700 mb-1">Room Name</label>
+            <input type="text" id="editRoomName" value={roomNameInput} onChange={(e) => setRoomNameInput(e.target.value)} autoFocus
+              className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 sm:text-sm font-medium"
+              onKeyDown={(e) => { if (e.key === "Enter" && roomNameInput.trim()) handleEditRoom(); }} />
+          </div>
+          <div>
+            <label htmlFor="editRoomTags" className="block text-sm font-medium text-stone-700 mb-1">Tags</label>
+            <input type="text" id="editRoomTags" value={roomTagsInput} onChange={(e) => setRoomTagsInput(e.target.value)}
+              placeholder="e.g. design, marketing (comma separated)"
+              className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 sm:text-sm font-medium"
+              onKeyDown={(e) => { if (e.key === "Enter") handleEditRoom(); }} />
+            <p className="mt-1 text-xs text-stone-400">Separate multiple tags with commas</p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Room Modal */}
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Room"
+        footer={<>
+          <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
+          <button onClick={handleDeleteRoom} disabled={isSubmitting}
+            className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            {isSubmitting ? "Deleting..." : "Delete Room"}
+          </button>
+        </>}>
+        <p className="text-sm text-stone-500">Are you sure you want to delete this room? This action cannot be undone.</p>
+      </Modal>
+
+      {/* Create Folder Modal */}
+      <Modal isOpen={isFolderModalOpen} onClose={() => setIsFolderModalOpen(false)} title="New Project"
+        footer={<>
+          <button onClick={() => setIsFolderModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
+          <button onClick={handleCreateFolder} disabled={!folderNameInput.trim()}
+            className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed">
+            Create Project
+          </button>
+        </>}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Project Name</label>
+            <input type="text" value={folderNameInput} onChange={(e) => setFolderNameInput(e.target.value)}
+              placeholder="e.g. Marketing Campaign" autoFocus
+              className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 sm:text-sm font-medium"
+              onKeyDown={(e) => { if (e.key === "Enter" && folderNameInput.trim()) handleCreateFolder(); }} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Color</label>
+            <div className="flex gap-2 flex-wrap">
+              {FOLDER_COLORS.map((c, i) => (
+                <button key={c.value} onClick={() => setFolderColorIndex(i)}
+                  className={`w-8 h-8 rounded-full transition-all ${folderColorIndex === i ? "ring-2 ring-offset-2 ring-stone-900 scale-110" : "hover:scale-105"}`}
+                  style={{ backgroundColor: c.value }} title={c.name} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Icon</label>
+            <div className="flex gap-2 flex-wrap">
+              {FOLDER_ICONS.map((icon, i) => (
+                <button key={icon} onClick={() => setFolderIconIndex(i)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                    folderIconIndex === i ? "bg-stone-900 text-white shadow-md" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                  }`}>
+                  <FolderIcon icon={icon} className="w-5 h-5" />
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Preview */}
+          <div className="flex items-center gap-3 px-3 py-2 bg-stone-50 rounded-xl">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: FOLDER_COLORS[folderColorIndex].value + "20", color: FOLDER_COLORS[folderColorIndex].value }}>
+              <FolderIcon icon={FOLDER_ICONS[folderIconIndex]} className="w-5 h-5" />
+            </div>
+            <span className="text-sm font-medium text-stone-700">{folderNameInput || "Project Name"}</span>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Folder Modal */}
+      <Modal isOpen={isEditFolderModalOpen} onClose={() => setIsEditFolderModalOpen(false)} title="Edit Project"
+        footer={<>
+          <button onClick={() => setIsEditFolderModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
+          <button onClick={handleEditFolder} disabled={!folderNameInput.trim()}
+            className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed">
+            Save Changes
+          </button>
+        </>}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Project Name</label>
+            <input type="text" value={folderNameInput} onChange={(e) => setFolderNameInput(e.target.value)} autoFocus
+              className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 sm:text-sm font-medium"
+              onKeyDown={(e) => { if (e.key === "Enter" && folderNameInput.trim()) handleEditFolder(); }} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Color</label>
+            <div className="flex gap-2 flex-wrap">
+              {FOLDER_COLORS.map((c, i) => (
+                <button key={c.value} onClick={() => setFolderColorIndex(i)}
+                  className={`w-8 h-8 rounded-full transition-all ${folderColorIndex === i ? "ring-2 ring-offset-2 ring-stone-900 scale-110" : "hover:scale-105"}`}
+                  style={{ backgroundColor: c.value }} title={c.name} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Icon</label>
+            <div className="flex gap-2 flex-wrap">
+              {FOLDER_ICONS.map((icon, i) => (
+                <button key={icon} onClick={() => setFolderIconIndex(i)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                    folderIconIndex === i ? "bg-stone-900 text-white shadow-md" : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                  }`}>
+                  <FolderIcon icon={icon} className="w-5 h-5" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Folder Modal */}
+      <Modal isOpen={isDeleteFolderModalOpen} onClose={() => setIsDeleteFolderModalOpen(false)} title="Delete Project"
+        footer={<>
+          <button onClick={() => setIsDeleteFolderModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
+          <button onClick={handleDeleteFolder}
+            className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700">
+            Delete Project
+          </button>
+        </>}>
+        <p className="text-sm text-stone-500">
+          Are you sure you want to delete this project? The rooms inside will not be deleted, they will just become uncategorized.
+        </p>
+      </Modal>
     </div>
   );
 }
