@@ -6,20 +6,21 @@ import { useState, useEffect } from "react";
 
 import { supabase } from "@/lib/supabaseClient";
 import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
+import {
+  FREE_TIER_MAX_PAGES_PER_PROJECT,
+  FREE_TIER_MAX_PROJECTS,
+} from "@/lib/planTier";
 import type { User } from "@supabase/supabase-js";
 
 export default function LandingPage() {
-  const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -32,8 +33,10 @@ export default function LandingPage() {
   const handleCheckout = async (priceId: string) => {
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session) {
         alert("Please sign in to upgrade.");
         window.location.href = "/login";
@@ -44,7 +47,7 @@ export default function LandingPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ priceId }),
       });
@@ -67,48 +70,52 @@ export default function LandingPage() {
     } catch (err) {
       console.error("Checkout error:", err);
       alert("An unexpected error occurred.");
-    } finally {
-      // setLoading(false); // Don't reset loading if redirecting
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] text-[#18181b] font-sans selection:bg-stone-200">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#faf9f6]/80 backdrop-blur-md border-b border-stone-100">
-        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
-              <Image
-                src="/logo.svg"
-                alt="Excaflow Logo"
-                width={32}
-                height={32}
-                className="object-cover"
-              />
-            </div>
-            <span className="text-xl font-bold tracking-tight text-stone-900 font-display">
+    <div className="min-h-screen bg-[#faf9f6] text-stone-900 font-sans selection:bg-yellow-200">
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-stone-100 bg-[#faf9f6]/85 backdrop-blur-md">
+        <div className="mx-auto flex h-[4.25rem] max-w-6xl items-center justify-between px-5 sm:px-6">
+          <Link
+            href="/"
+            className="group flex items-center gap-3 focus-visible:rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-400/60"
+          >
+            <Image
+              src="/logo.svg"
+              alt=""
+              width={40}
+              height={40}
+              className="h-10 w-10 shrink-0 object-contain"
+            />
+            <span className="text-[1.125rem] font-semibold tracking-tight text-stone-900 transition group-hover:text-yellow-700">
               Excaflow
             </span>
           </Link>
-          <div className="flex items-center gap-6">
-            <Link href="#features" className="text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors hidden sm:block">
+          <div className="flex items-center gap-5 sm:gap-7">
+            <Link
+              href="#features"
+              className="hidden text-[0.95rem] text-stone-500 transition hover:text-stone-900 sm:block"
+            >
               Features
             </Link>
-            <Link href="#pricing" className="text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors hidden sm:block">
+            <Link
+              href="#pricing"
+              className="hidden text-[0.95rem] text-stone-500 transition hover:text-stone-900 sm:block"
+            >
               Pricing
             </Link>
             {user ? (
               <Link
                 href="/dashboard"
-                className="px-5 py-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-medium rounded-full transition-all"
+                className="rounded-full bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800"
               >
                 Dashboard
               </Link>
             ) : (
               <Link
                 href="/login"
-                className="px-5 py-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-medium rounded-full transition-all"
+                className="rounded-full bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800"
               >
                 Sign in
               </Link>
@@ -117,158 +124,220 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-20 px-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+      <section className="px-5 pb-20 pt-[7.5rem] sm:px-6">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-16">
             <div className="max-w-xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-50 rounded-full mb-8 border border-yellow-100">
-                <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                <span className="text-yellow-700 text-xs font-bold tracking-wide uppercase">The Missing Link in AI Development</span>
-              </div>
-              
-              <h1 className="text-5xl sm:text-6xl font-bold leading-[1.1] mb-8 text-stone-900 tracking-tight">
-                Visual-First <br />
-                <span className="text-yellow-500">Specification Platform</span> <br />
-                for the AI Era
-              </h1>
-              
-              <p className="text-lg text-stone-600 mb-10 leading-relaxed max-w-md font-medium">
-                Stop struggling with text prompts. Clarify your architecture visually, generate precise context, and let AI build exactly what you mean.
+              <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-yellow-100 bg-yellow-50/90 px-3.5 py-1.5 text-[0.8125rem] text-yellow-900/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                <span className="h-2 w-2 rounded-full bg-yellow-500" aria-hidden />
+                Whiteboard for specs &amp; diagrams
               </p>
-              
-              <div className="flex flex-wrap gap-4">
+
+              <h1 className="mb-6 text-[2.35rem] font-semibold leading-[1.15] tracking-tight text-stone-900 sm:text-5xl sm:leading-[1.12]">
+                Draw what you mean.
+                <span className="mt-1 block text-yellow-500">
+                  Build what you drew.
+                </span>
+              </h1>
+
+              <p className="mb-9 max-w-md text-[1.05rem] leading-relaxed text-stone-600">
+                Skip the wall of text. Sketch flows, map ideas, and share a
+                picture everyone can agree on—no design degree required.
+              </p>
+
+              <div className="flex flex-wrap gap-3">
                 <Link
                   href="/signup"
-                  className="px-8 py-4 bg-yellow-400 hover:bg-yellow-500 text-stone-900 font-bold rounded-full transition-all flex items-center gap-2 shadow-lg shadow-yellow-400/20 transform hover:-translate-y-1"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-yellow-400 px-7 py-3.5 text-[0.95rem] font-semibold text-stone-900 shadow-[0_4px_14px_rgba(234,179,8,0.35)] transition hover:bg-yellow-500 hover:shadow-[0_6px_20px_rgba(234,179,8,0.4)]"
                 >
-                  Start Specifying
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  Start free
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.25"
+                    aria-hidden
+                  >
+                    <path d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
                 </Link>
                 <Link
                   href="#features"
-                  className="px-8 py-4 bg-white border-2 border-stone-100 hover:border-yellow-400 text-stone-900 font-bold rounded-full transition-all"
+                  className="inline-flex items-center rounded-2xl border-2 border-stone-100 bg-white px-7 py-3.5 text-[0.95rem] font-semibold text-stone-900 transition hover:border-yellow-400 hover:bg-white"
                 >
-                  See How It Works
+                  See what you can do
                 </Link>
               </div>
             </div>
-            
+
             <div className="relative">
-              <div className="relative rounded-2xl overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-stone-100 bg-white">
-                <div className="aspect-[4/3] relative">
+              <div className="relative overflow-hidden rounded-[1.35rem] border border-stone-100 bg-white shadow-[0_24px_48px_-20px_rgba(0,0,0,0.12)]">
+                <div className="relative aspect-[4/3]">
                   <Image
                     src="/images/hero-preview-yellow.png"
-                    alt="Excaflow Interface"
+                    alt="Excaflow canvas preview"
                     fill
                     className="object-cover"
                     priority
                   />
                 </div>
               </div>
-              {/* Decorative elements */}
-              <div className="absolute -z-10 top-10 -right-10 w-full h-full bg-yellow-100 rounded-3xl"></div>
-              <div className="absolute -z-20 -bottom-10 -left-10 w-64 h-64 bg-yellow-50 rounded-full blur-3xl"></div>
+              <div
+                className="absolute -right-6 -z-10 top-8 h-[calc(100%-2rem)] w-[calc(100%+0.5rem)] rounded-[1.5rem] bg-yellow-100/80"
+                aria-hidden
+              />
+              <div
+                className="absolute -bottom-8 -left-8 -z-20 h-48 w-48 rounded-full bg-yellow-50 blur-3xl"
+                aria-hidden
+              />
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-24 px-6 bg-white relative overflow-hidden">
-        <div className="max-w-6xl mx-auto relative z-10">
-          <div className="text-center mb-20 max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold mb-4 text-stone-900">
-              From Mental Model to AI Execution
+      <section
+        id="features"
+        className="relative overflow-hidden bg-white px-5 py-20 sm:px-6"
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(254,240,138,0.35),transparent)]" />
+        <div className="relative z-10 mx-auto max-w-6xl">
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <h2 className="mb-3 text-2xl font-semibold text-stone-900 sm:text-3xl">
+              A little structure, a lot less confusion
             </h2>
-            <p className="text-stone-500 text-lg font-medium">
-              Bridge the gap between your idea and the code AI writes.
+            <p className="text-[1.05rem] text-stone-500">
+              When words run out, a canvas usually helps.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid gap-6 md:grid-cols-3 md:gap-7">
             {[
               {
-                title: "Clarify Complex Logic",
-                desc: "Draw your system architecture, data flows, and UI layouts. Clear your mind before writing a single line of code.",
+                title: "Clarify the messy bits",
+                desc: "Map architecture, flows, or UI in minutes. Get the idea out of your head before you argue about it in chat.",
                 icon: (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden
+                  >
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                   </svg>
-                )
+                ),
               },
               {
-                title: "Generate AI Prompts",
-                desc: "Export your diagrams as structured context. Give LLMs the visual understanding they lack to generate accurate code.",
+                title: "Hand context to your tools",
+                desc: "Turn sketches into a shared reference—so assistants and teammates aren’t guessing from half a prompt.",
                 icon: (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden
+                  >
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
                   </svg>
-                )
+                ),
               },
               {
-                title: "Bridge the Gap",
-                desc: "Iterate on your specs visually. Ensure your AI assistant understands the big picture, not just the syntax.",
+                title: "Iterate without shame",
+                desc: "Redraw, duplicate, tweak. Versioning is a feature, not a failure—your spec can grow with the project.",
                 icon: (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden
+                  >
+                    <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                   </svg>
-                )
-              }
+                ),
+              },
             ].map((feature, i) => (
-              <div key={i} className="group p-8 rounded-3xl bg-stone-50 border border-transparent hover:border-yellow-400 hover:bg-white hover:shadow-xl hover:shadow-yellow-400/10 transition-all duration-300">
-                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-yellow-500 mb-6 shadow-sm group-hover:scale-110 group-hover:bg-yellow-400 group-hover:text-stone-900 transition-all duration-300">
+              <div
+                key={i}
+                className="group rounded-[1.35rem] border border-transparent bg-stone-50 p-7 transition hover:border-yellow-400 hover:bg-white hover:shadow-xl hover:shadow-yellow-400/10"
+              >
+                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-yellow-500 shadow-sm ring-1 ring-stone-100 transition group-hover:scale-110 group-hover:bg-yellow-400 group-hover:text-stone-900">
                   {feature.icon}
                 </div>
-                <h3 className="text-xl font-bold text-stone-900 mb-3">{feature.title}</h3>
-                <p className="text-stone-500 leading-relaxed font-medium">
-                  {feature.desc}
-                </p>
+                <h3 className="mb-2 text-lg font-semibold text-stone-900">
+                  {feature.title}
+                </h3>
+                <p className="leading-relaxed text-stone-500">{feature.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section id="pricing" className="py-24 px-6 bg-stone-50">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl font-bold mb-4 text-stone-900">
-              Simple, Transparent Pricing
+      <section id="pricing" className="bg-stone-50 px-5 py-20 sm:px-6">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-14 text-center">
+            <h2 className="mb-3 text-2xl font-semibold text-stone-900 sm:text-3xl">
+              Pricing that stays out of your way
             </h2>
-            <p className="text-stone-500 text-lg font-medium">
-              Start for free, upgrade when you need more power.
+            <p className="text-[1.05rem] text-stone-500">
+              Try free, upgrade when you’re in it every day.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* Free Plan */}
-            <div className="bg-white p-10 rounded-3xl border border-stone-200 shadow-sm flex flex-col hover:border-yellow-400 transition-colors duration-300">
+          <div className="mx-auto grid max-w-4xl gap-6 md:grid-cols-2 md:gap-8">
+            <div className="flex flex-col rounded-[1.35rem] border border-stone-200 bg-white p-9 shadow-sm transition-colors hover:border-yellow-400">
               <div className="mb-8">
-                <h3 className="text-xl font-bold text-stone-900 mb-2">Free</h3>
+                <h3 className="mb-2 text-lg font-semibold text-stone-900">
+                  Free
+                </h3>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-stone-900">$0</span>
-                  <span className="text-stone-500 font-medium">/month</span>
+                  <span className="text-4xl font-semibold text-stone-900">
+                    $0
+                  </span>
+                  <span className="text-stone-500">/month</span>
                 </div>
-                <p className="text-stone-500 mt-4 font-medium">Essential tools for casual creators.</p>
+                <p className="mt-3 text-stone-500">
+                  Organize a few projects and rooms—upgrade when you need more.
+                </p>
               </div>
-              
-              <ul className="space-y-4 mb-10 flex-1">
+
+              <ul className="mb-10 flex-1 space-y-3.5">
                 {[
-                  "Up to 5 boards",
+                  `Up to ${FREE_TIER_MAX_PROJECTS} projects`,
+                  `Up to ${FREE_TIER_MAX_PAGES_PER_PROJECT} rooms per project`,
                   "Basic AI generation",
                   "Cloud sync",
-                  "2 devices"
                 ].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-stone-600 font-medium">
-                    <div className="w-5 h-5 rounded-full bg-stone-100 flex items-center justify-center">
-                      <svg className="w-3 h-3 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                  <li
+                    key={i}
+                    className="flex items-center gap-3 text-stone-600"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500">
+                      <svg
+                        className="h-3 w-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        aria-hidden
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2.5"
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
-                    </div>
+                    </span>
                     {item}
                   </li>
                 ))}
@@ -276,101 +345,123 @@ export default function LandingPage() {
 
               <Link
                 href="/signup"
-                className="block w-full py-4 px-6 text-center bg-stone-100 hover:bg-stone-200 text-stone-900 font-bold rounded-2xl transition-colors"
+                className="block w-full rounded-2xl bg-stone-100 py-3.5 text-center text-[0.95rem] font-semibold text-stone-900 transition hover:bg-stone-200"
               >
-                Get Started
+                Get started
               </Link>
             </div>
 
-            {/* Pro Plan */}
-            <div className="bg-stone-900 p-10 rounded-3xl text-white shadow-2xl shadow-stone-900/20 flex flex-col relative overflow-hidden transform md:-translate-y-4">
-              <div className="absolute top-0 right-0 bg-yellow-400 px-4 py-1 rounded-bl-2xl text-xs font-bold tracking-wide uppercase text-stone-900">
+            <div className="relative flex flex-col overflow-hidden rounded-[1.35rem] border border-stone-900 bg-stone-900 p-9 text-white shadow-2xl shadow-stone-900/20 md:-translate-y-1">
+              <div className="absolute right-0 top-0 rounded-bl-2xl bg-yellow-400 px-3.5 py-1.5 text-[0.7rem] font-semibold uppercase tracking-wide text-stone-900">
                 Popular
               </div>
-              
+
               <div className="mb-8">
-                <h3 className="text-xl font-bold text-white mb-2">Pro</h3>
+                <h3 className="mb-2 text-lg font-semibold">Pro</h3>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-yellow-400">$5</span>
-                  <span className="text-stone-400 font-medium">/month</span>
+                  <span className="text-4xl font-semibold text-yellow-400">
+                    $5
+                  </span>
+                  <span className="text-stone-400">/month</span>
                 </div>
-                <p className="text-stone-400 mt-4 font-medium">Unlimited power for professionals.</p>
+                <p className="mt-3 text-stone-400">
+                  No project or room caps—built for daily, team-heavy use.
+                </p>
               </div>
-              
-              <ul className="space-y-4 mb-10 flex-1">
+
+              <ul className="mb-10 flex-1 space-y-3.5">
                 {[
-                  "Unlimited boards",
+                  "Unlimited projects",
+                  "Unlimited rooms per project",
                   "Advanced AI features",
                   "Priority cloud sync",
                   "Unlimited devices",
                   "High-res exports",
-                  "Priority support"
+                  "Priority support",
                 ].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-stone-300 font-medium">
-                    <div className="w-5 h-5 rounded-full bg-yellow-400/20 flex items-center justify-center">
-                      <svg className="w-3 h-3 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                  <li
+                    key={i}
+                    className="flex items-center gap-3 text-stone-300"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-yellow-400/20 text-yellow-400">
+                      <svg
+                        className="h-3 w-3"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        aria-hidden
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2.5"
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
-                    </div>
+                    </span>
                     {item}
                   </li>
                 ))}
               </ul>
 
               <button
+                type="button"
                 onClick={() => handleCheckout(STRIPE_PRICE_ID)}
                 disabled={loading}
-                className="block w-full py-4 px-6 text-center bg-yellow-400 hover:bg-yellow-500 text-stone-900 font-bold rounded-2xl transition-all transform hover:-translate-y-0.5 disabled:opacity-70"
+                className="block w-full rounded-2xl bg-yellow-400 py-3.5 text-center text-[0.95rem] font-semibold text-stone-900 transition hover:bg-yellow-500 disabled:opacity-70"
               >
-                {loading ? "Processing..." : "Upgrade to Pro"}
+                {loading ? "Processing…" : "Upgrade to Pro"}
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-24 px-6 bg-white">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold text-stone-900 mb-6">
-            Ready to code at the speed of thought?
+      <section className="bg-white px-5 py-20 sm:px-6">
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 className="mb-4 text-2xl font-semibold text-stone-900 sm:text-3xl">
+            Want to try it with a real idea?
           </h2>
-          <p className="text-xl text-stone-500 mb-10 max-w-xl mx-auto font-medium">
-            Join developers who use Visual Specs to master AI coding.
+          <p className="mb-9 text-[1.05rem] leading-relaxed text-stone-500">
+            Open a board, doodle once, and see if it feels lighter than
+            another long message thread.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/signup"
-              className="px-10 py-4 bg-stone-900 hover:bg-stone-800 text-white font-bold rounded-full transition-all shadow-xl shadow-stone-900/20 transform hover:-translate-y-1"
-            >
-              Start for Free
-            </Link>
-          </div>
+          <Link
+            href="/signup"
+            className="inline-flex rounded-2xl bg-stone-900 px-9 py-3.5 text-[0.95rem] font-semibold text-white shadow-xl shadow-stone-900/20 transition hover:bg-stone-800"
+          >
+            Start for free
+          </Link>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-stone-200 bg-white py-12 px-6">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg flex items-center justify-center overflow-hidden">
-              <Image
-                src="/logo.svg"
-                alt="Excaflow Logo"
-                width={24}
-                height={24}
-                className="object-cover"
-              />
-            </div>
-            <span className="text-lg font-bold tracking-tight text-stone-900">Excaflow</span>
+      <footer className="border-t border-stone-200 bg-white px-5 py-10 sm:px-6">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-8 md:flex-row">
+          <div className="flex items-center gap-2.5">
+            <Image
+              src="/logo.svg"
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0 object-contain"
+            />
+            <span className="text-base font-semibold text-stone-900">
+              Excaflow
+            </span>
           </div>
-          
+
           <div className="flex gap-8 text-sm text-stone-500">
-            <Link href="#" className="hover:text-stone-900 transition-colors">Privacy</Link>
-            <Link href="#" className="hover:text-stone-900 transition-colors">Terms</Link>
-            <Link href="#" className="hover:text-stone-900 transition-colors">Contact</Link>
+            <Link href="#" className="transition hover:text-stone-900">
+              Privacy
+            </Link>
+            <Link href="#" className="transition hover:text-stone-900">
+              Terms
+            </Link>
+            <Link href="#" className="transition hover:text-stone-900">
+              Contact
+            </Link>
           </div>
-          
+
           <div className="text-sm text-stone-400">
             &copy; 2025 Excaflow. All rights reserved.
           </div>

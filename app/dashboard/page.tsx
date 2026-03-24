@@ -15,6 +15,10 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { authenticatedFetch } from "@/lib/apiClient";
 import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
+import {
+  FREE_TIER_MAX_PAGES_PER_PROJECT,
+  FREE_TIER_MAX_PROJECTS,
+} from "@/lib/planTier";
 import type { RoomIndexEntry, LocalRoom } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
 import Modal from "@/components/Modal";
@@ -50,13 +54,6 @@ function loadFolders(): VirtualFolder[] {
   } catch { return []; }
 }
 
-function saveFolders(folders: VirtualFolder[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
-  } catch (e) { console.error("Error saving folders:", e); }
-}
-
 // ─── Icon Components ─────────────────────────────────────────
 function FolderIcon({ icon, className = "w-5 h-5" }: { icon: string; className?: string }) {
   const icons: Record<string, React.ReactNode> = {
@@ -87,6 +84,13 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [syncingRooms, setSyncingRooms] = useState<Set<string>>(new Set());
   const [isPro, setIsPro] = useState(false);
+  const [planLimits, setPlanLimits] = useState<{
+    maxProjects: number | null;
+    maxPagesPerProject: number | null;
+  }>({
+    maxProjects: FREE_TIER_MAX_PROJECTS,
+    maxPagesPerProject: FREE_TIER_MAX_PAGES_PER_PROJECT,
+  });
   const [isLoadingSubscription, setIsLoadingSubscription] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -115,10 +119,59 @@ export default function Home() {
   const [folderIconIndex, setFolderIconIndex] = useState(0);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [folderActionPending, setFolderActionPending] = useState(false);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
 
   // ─── Sorting Helper ──────────────────────────────────────
   const sortRooms = useCallback((r: RoomIndexEntry[]) =>
     [...r].sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()), []);
+
+  const fetchProjectsFromServer = useCallback(async () => {
+    try {
+      const res = await authenticatedFetch("/api/projects");
+      if (!res.ok) {
+        setFolders(loadFolders());
+        return;
+      }
+      let list: VirtualFolder[] = await res.json();
+      if (list.length === 0) {
+        const local = loadFolders();
+        if (local.length > 0) {
+          const roomIndex = loadRoomsIndex();
+          const myRoomIds = new Set(roomIndex.map((r) => r.id));
+          for (const f of local) {
+            const createRes = await authenticatedFetch("/api/projects", {
+              method: "POST",
+              body: JSON.stringify({ name: f.name, color: f.color, icon: f.icon }),
+            });
+            if (!createRes.ok) continue;
+            const created = await createRes.json();
+            const validRoomIds = f.roomIds.filter((id) => myRoomIds.has(id));
+            if (validRoomIds.length > 0) {
+              await authenticatedFetch(`/api/projects/${created.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ roomIds: validRoomIds }),
+              });
+            }
+          }
+          try {
+            localStorage.removeItem(FOLDERS_KEY);
+          } catch {
+            /* ignore */
+          }
+          const res2 = await authenticatedFetch("/api/projects");
+          if (res2.ok) list = await res2.json();
+        }
+      }
+      setFolders(list);
+    } catch (e) {
+      console.error("Error loading projects:", e);
+      setFolders(loadFolders());
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }, []);
 
   // ─── Initialize ──────────────────────────────────────────
   useEffect(() => {
@@ -141,8 +194,8 @@ export default function Home() {
 
     const loadedRooms = sortRooms(loadRoomsIndex());
     setRooms(loadedRooms);
-    setFolders(loadFolders());
     syncRoomsFromServer(loadedRooms);
+    void fetchProjectsFromServer();
 
     // Stripe callback handling
     const urlParams = new URLSearchParams(window.location.search);
@@ -164,7 +217,7 @@ export default function Home() {
     }
 
     return () => { subscription.unsubscribe(); };
-  }, [router, sortRooms]);
+  }, [router, sortRooms, fetchProjectsFromServer]);
 
   // ─── Filtered Rooms ──────────────────────────────────────
   const filteredRooms = useMemo(() => {
@@ -213,11 +266,56 @@ export default function Home() {
     return folders.find((f) => f.id === activeFolder) || null;
   }, [activeFolder, folders]);
 
+  const canCreateMoreProjects = useMemo(() => {
+    if (isPro || planLimits.maxProjects === null) return true;
+    return folders.length < planLimits.maxProjects;
+  }, [isPro, planLimits.maxProjects, folders.length]);
+
+  const canAddPageToFolder = useCallback(
+    (folder: VirtualFolder) => {
+      if (isPro || planLimits.maxPagesPerProject === null) return true;
+      return folder.roomIds.length < planLimits.maxPagesPerProject;
+    },
+    [isPro, planLimits.maxPagesPerProject],
+  );
+
+  const activeProjectFolder = useMemo(() => {
+    if (!activeFolder || activeFolder === "__uncategorized") return null;
+    return folders.find((f) => f.id === activeFolder) ?? null;
+  }, [activeFolder, folders]);
+
+  const isActiveProjectFull =
+    activeProjectFolder !== null && !canAddPageToFolder(activeProjectFolder);
+
+  const parseProjectApiError = async (res: Response) => {
+    try {
+      const data = (await res.json()) as { error?: string; code?: string };
+      if (data.code === "PROJECT_LIMIT") {
+        return "แผนฟรีสร้างได้สูงสุด 5 โปรเจกต์ อัปเกรดเป็น Pro เพื่อเพิ่มไม่จำกัด";
+      }
+      if (data.code === "PAGES_PER_PROJECT_LIMIT") {
+        return "แผนฟรีใส่ได้สูงสุด 5 หน้าต่อโปรเจกต์ อัปเกรดเป็น Pro เพื่อเพิ่มไม่จำกัด";
+      }
+      return data.error || "เกิดข้อผิดพลาด";
+    } catch {
+      return "เกิดข้อผิดพลาด";
+    }
+  };
+
   // ─── Subscription/Auth handlers ──────────────────────────
   const fetchSubscriptionStatus = async () => {
     try {
       const response = await authenticatedFetch("/api/subscription");
-      if (response.ok) { const data = await response.json(); setIsPro(data.isPro); }
+      if (response.ok) {
+        const data = await response.json();
+        setIsPro(data.isPro);
+        if (data.limits) {
+          setPlanLimits({
+            maxProjects: data.limits.maxProjects,
+            maxPagesPerProject: data.limits.maxPagesPerProject,
+          });
+        }
+      }
     } catch (error) { console.error("Error fetching subscription:", error); }
     finally { setIsLoadingSubscription(false); }
   };
@@ -277,6 +375,7 @@ export default function Home() {
         setRooms(updated);
       }
     } catch (error) { console.error("Error syncing rooms from server:", error); }
+    finally { setIsLoadingRooms(false); }
   };
 
   // ─── Room CRUD ───────────────────────────────────────────
@@ -290,6 +389,15 @@ export default function Home() {
   const handleCreateRoom = async () => {
     const roomName = roomNameInput.trim();
     if (!roomName) return;
+    if (activeFolder && activeFolder !== "__uncategorized") {
+      const folder = folders.find((f) => f.id === activeFolder);
+      if (folder && !canAddPageToFolder(folder)) {
+        alert(
+          "แผนฟรีใส่ได้สูงสุด 5 หน้าต่อโปรเจกต์ อัปเกรดเป็น Pro เพื่อเพิ่มไม่จำกัด"
+        );
+        return;
+      }
+    }
     setIsSubmitting(true);
     try {
       const response = await authenticatedFetch("/api/rooms", {
@@ -307,13 +415,24 @@ export default function Home() {
       };
       await saveLocalRoom(localRoom);
 
-      // Auto-add to active folder if one is selected
       if (activeFolder && activeFolder !== "__uncategorized") {
-        const updatedFolders = folders.map((f) =>
-          f.id === activeFolder ? { ...f, roomIds: [...f.roomIds, dbRoom.id] } : f
-        );
-        setFolders(updatedFolders);
-        saveFolders(updatedFolders);
+        const folder = folders.find((f) => f.id === activeFolder);
+        if (folder && !folder.roomIds.includes(dbRoom.id)) {
+          try {
+            const patchRes = await authenticatedFetch(`/api/projects/${activeFolder}`, {
+              method: "PATCH",
+              body: JSON.stringify({ roomIds: [...folder.roomIds, dbRoom.id] }),
+            });
+            if (patchRes.ok) {
+              const updatedFolder: VirtualFolder = await patchRes.json();
+              setFolders((prev) => prev.map((f) => (f.id === activeFolder ? updatedFolder : f)));
+            } else {
+              alert(await parseProjectApiError(patchRes));
+            }
+          } catch (e) {
+            console.error("Error adding room to project:", e);
+          }
+        }
       }
 
       refreshRooms();
@@ -353,10 +472,9 @@ export default function Home() {
       } catch (error) { console.error("Error deleting room from server:", error); }
       await deleteLocalRoom(selectedRoomId);
 
-      // Remove from folders
-      const updatedFolders = folders.map((f) => ({ ...f, roomIds: f.roomIds.filter((id) => id !== selectedRoomId) }));
-      setFolders(updatedFolders);
-      saveFolders(updatedFolders);
+      setFolders((prev) =>
+        prev.map((f) => ({ ...f, roomIds: f.roomIds.filter((id) => id !== selectedRoomId) }))
+      );
 
       refreshRooms();
       setIsDeleteModalOpen(false);
@@ -382,23 +500,51 @@ export default function Home() {
   };
 
   // ─── Folder CRUD ─────────────────────────────────────────
-  const openFolderModal = () => { setFolderNameInput(""); setFolderColorIndex(0); setFolderIconIndex(0); setIsFolderModalOpen(true); };
+  const openFolderModal = () => {
+    if (!canCreateMoreProjects) {
+      alert(
+        "แผนฟรีสร้างได้สูงสุด 5 โปรเจกต์ อัปเกรดเป็น Pro เพื่อเพิ่มไม่จำกัด"
+      );
+      return;
+    }
+    setFolderNameInput("");
+    setFolderColorIndex(0);
+    setFolderIconIndex(0);
+    setIsFolderModalOpen(true);
+  };
 
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     if (!folderNameInput.trim()) return;
-    const newFolder: VirtualFolder = {
-      id: `folder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: folderNameInput.trim(),
-      color: FOLDER_COLORS[folderColorIndex].value,
-      icon: FOLDER_ICONS[folderIconIndex],
-      roomIds: [],
-      createdAt: new Date().toISOString(),
-    };
-    const updated = [...folders, newFolder];
-    setFolders(updated);
-    saveFolders(updated);
-    setIsFolderModalOpen(false);
-    setActiveFolder(newFolder.id);
+    if (!canCreateMoreProjects) {
+      alert(
+        "แผนฟรีสร้างได้สูงสุด 5 โปรเจกต์ อัปเกรดเป็น Pro เพื่อเพิ่มไม่จำกัด"
+      );
+      return;
+    }
+    setFolderActionPending(true);
+    try {
+      const res = await authenticatedFetch("/api/projects", {
+        method: "POST",
+        body: JSON.stringify({
+          name: folderNameInput.trim(),
+          color: FOLDER_COLORS[folderColorIndex].value,
+          icon: FOLDER_ICONS[folderIconIndex],
+        }),
+      });
+      if (!res.ok) {
+        alert(await parseProjectApiError(res));
+        return;
+      }
+      const newFolder: VirtualFolder = await res.json();
+      setFolders((prev) => [...prev, newFolder]);
+      setIsFolderModalOpen(false);
+      setActiveFolder(newFolder.id);
+    } catch (e) {
+      console.error(e);
+      alert("ไม่สามารถสร้างโปรเจกต์ได้ กรุณาลองอีกครั้ง");
+    } finally {
+      setFolderActionPending(false);
+    }
   };
 
   const openEditFolderModal = (folderId: string) => {
@@ -412,55 +558,115 @@ export default function Home() {
     }
   };
 
-  const handleEditFolder = () => {
+  const handleEditFolder = async () => {
     if (!editingFolderId || !folderNameInput.trim()) return;
-    const updated = folders.map((f) =>
-      f.id === editingFolderId
-        ? { ...f, name: folderNameInput.trim(), color: FOLDER_COLORS[folderColorIndex].value, icon: FOLDER_ICONS[folderIconIndex] }
-        : f
-    );
-    setFolders(updated);
-    saveFolders(updated);
-    setIsEditFolderModalOpen(false);
-    setEditingFolderId(null);
+    setFolderActionPending(true);
+    try {
+      const res = await authenticatedFetch(`/api/projects/${editingFolderId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: folderNameInput.trim(),
+          color: FOLDER_COLORS[folderColorIndex].value,
+          icon: FOLDER_ICONS[folderIconIndex],
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update project");
+      const updated: VirtualFolder = await res.json();
+      setFolders((prev) => prev.map((f) => (f.id === editingFolderId ? updated : f)));
+      setIsEditFolderModalOpen(false);
+      setEditingFolderId(null);
+    } catch (e) {
+      console.error(e);
+      alert("ไม่สามารถแก้ไขโปรเจกต์ได้ กรุณาลองอีกครั้ง");
+    } finally {
+      setFolderActionPending(false);
+    }
   };
 
   const openDeleteFolderModal = (folderId: string) => { setEditingFolderId(folderId); setIsDeleteFolderModalOpen(true); };
 
-  const handleDeleteFolder = () => {
+  const handleDeleteFolder = async () => {
     if (!editingFolderId) return;
-    const updated = folders.filter((f) => f.id !== editingFolderId);
-    setFolders(updated);
-    saveFolders(updated);
-    if (activeFolder === editingFolderId) setActiveFolder(null);
-    setIsDeleteFolderModalOpen(false);
-    setEditingFolderId(null);
+    setFolderActionPending(true);
+    try {
+      const res = await authenticatedFetch(`/api/projects/${editingFolderId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete project");
+      setFolders((prev) => prev.filter((f) => f.id !== editingFolderId));
+      if (activeFolder === editingFolderId) setActiveFolder(null);
+      setIsDeleteFolderModalOpen(false);
+      setEditingFolderId(null);
+    } catch (e) {
+      console.error(e);
+      alert("ไม่สามารถลบโปรเจกต์ได้ กรุณาลองอีกครั้ง");
+    } finally {
+      setFolderActionPending(false);
+    }
   };
 
   // ─── Drag & Drop ─────────────────────────────────────────
   const handleDragStart = (roomId: string) => { setDraggedRoomId(roomId); };
   const handleDragOver = (e: React.DragEvent, folderId: string) => { e.preventDefault(); setDragOverFolder(folderId); };
   const handleDragLeave = () => { setDragOverFolder(null); };
-  const handleDrop = (folderId: string) => {
-    if (!draggedRoomId || folderId === "__uncategorized") { setDragOverFolder(null); setDraggedRoomId(null); return; }
-    const updated = folders.map((f) => {
-      if (f.id === folderId && !f.roomIds.includes(draggedRoomId)) {
-        return { ...f, roomIds: [...f.roomIds, draggedRoomId] };
+  const handleDrop = async (folderId: string) => {
+    if (!draggedRoomId || folderId === "__uncategorized") {
+      setDragOverFolder(null);
+      setDraggedRoomId(null);
+      return;
+    }
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder || folder.roomIds.includes(draggedRoomId)) {
+      setDragOverFolder(null);
+      setDraggedRoomId(null);
+      return;
+    }
+    if (!canAddPageToFolder(folder)) {
+      alert(
+        "แผนฟรีใส่ได้สูงสุด 5 หน้าต่อโปรเจกต์ อัปเกรดเป็น Pro เพื่อเพิ่มไม่จำกัด"
+      );
+      setDragOverFolder(null);
+      setDraggedRoomId(null);
+      return;
+    }
+    try {
+      const res = await authenticatedFetch(`/api/projects/${folderId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ roomIds: [...folder.roomIds, draggedRoomId] }),
+      });
+      if (!res.ok) {
+        alert(await parseProjectApiError(res));
+        return;
       }
-      return f;
-    });
-    setFolders(updated);
-    saveFolders(updated);
-    setDragOverFolder(null);
-    setDraggedRoomId(null);
+      const updated: VirtualFolder = await res.json();
+      setFolders((prev) => prev.map((f) => (f.id === folderId ? updated : f)));
+    } catch (e) {
+      console.error(e);
+      alert("ไม่สามารถเพิ่มห้องในโปรเจกต์ได้ กรุณาลองอีกครั้ง");
+    } finally {
+      setDragOverFolder(null);
+      setDraggedRoomId(null);
+    }
   };
 
-  const removeRoomFromFolder = (roomId: string, folderId: string) => {
-    const updated = folders.map((f) =>
-      f.id === folderId ? { ...f, roomIds: f.roomIds.filter((id) => id !== roomId) } : f
-    );
-    setFolders(updated);
-    saveFolders(updated);
+  const removeRoomFromFolder = async (roomId: string, folderId: string) => {
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder) return;
+    try {
+      const res = await authenticatedFetch(`/api/projects/${folderId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ roomIds: folder.roomIds.filter((id) => id !== roomId) }),
+      });
+      if (!res.ok) {
+        alert(await parseProjectApiError(res));
+        return;
+      }
+      const updated: VirtualFolder = await res.json();
+      setFolders((prev) => prev.map((f) => (f.id === folderId ? updated : f)));
+    } catch (e) {
+      console.error(e);
+      alert("ไม่สามารถอัปเดตโปรเจกต์ได้ กรุณาลองอีกครั้ง");
+    }
   };
 
   // ─── Other ───────────────────────────────────────────────
@@ -504,31 +710,53 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              <Link href="/" className="flex items-center gap-2 group">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden shadow-sm group-hover:shadow-md transition-shadow">
-                  <Image src="/logo.svg" alt="Excaflow Logo" width={32} height={32} className="object-cover" />
-                </div>
-                <span className="text-lg font-bold tracking-tight text-stone-900">Excaflow</span>
+              <Link href="/" className="group flex items-center gap-2.5">
+                <Image
+                  src="/logo.svg"
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 shrink-0 object-contain"
+                />
+                <span className="text-lg font-semibold tracking-tight text-stone-900 transition group-hover:text-yellow-700">
+                  Excaflow
+                </span>
               </Link>
             </div>
 
             <div className="flex items-center gap-3">
-              {!isLoadingSubscription && (
-                isPro ? (
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">PRO</span>
-                    <button onClick={handleManageSubscription} className="text-sm text-stone-500 hover:text-stone-900 transition-colors font-medium">Manage</button>
-                  </div>
-                ) : (
-                  <button onClick={handleCheckout} disabled={isCheckingOut}
-                    className="text-sm font-bold text-stone-900 bg-yellow-400 hover:bg-yellow-500 px-4 py-1.5 rounded-full shadow-sm transition-all disabled:opacity-50">
-                    {isCheckingOut ? "..." : "Upgrade"}
-                  </button>
-                )
+              {isLoadingSubscription ? (
+                <div
+                  className="flex items-center gap-2 min-h-[36px]"
+                  aria-busy="true"
+                  aria-label="กำลังโหลดข้อมูลแผน"
+                >
+                  <div className="h-6 w-11 rounded-full bg-stone-200 animate-pulse" />
+                  <div className="h-4 w-14 rounded-md bg-stone-200/90 animate-pulse" />
+                </div>
+              ) : isPro ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">PRO</span>
+                  <button onClick={handleManageSubscription} className="text-sm text-stone-500 hover:text-stone-900 transition-colors font-medium">Manage</button>
+                </div>
+              ) : (
+                <button onClick={handleCheckout} disabled={isCheckingOut}
+                  className="text-sm font-bold text-stone-900 bg-yellow-400 hover:bg-yellow-500 px-4 py-1.5 rounded-full shadow-sm transition-all disabled:opacity-50">
+                  {isCheckingOut ? "..." : "Upgrade"}
+                </button>
               )}
               <div className="hidden md:flex items-center gap-2 text-sm text-stone-600 bg-stone-50 px-3 py-1.5 rounded-full border border-stone-200">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="max-w-[180px] truncate">{user.email}</span>
+                {isLoadingSubscription ? (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-stone-200 animate-pulse shrink-0" aria-hidden />
+                    <div className="h-4 max-w-[180px] w-[min(180px,40vw)] rounded bg-stone-200 animate-pulse" aria-hidden />
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
+                    <span className="max-w-[180px] truncate">{user.email}</span>
+                  </>
+                )}
               </div>
               <button onClick={handleLogout} className="text-stone-400 hover:text-stone-600 p-2 rounded-xl hover:bg-stone-100 transition-colors" title="Sign out">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -578,9 +806,51 @@ export default function Home() {
 
             {/* Projects */}
             <div className="mb-2">
-              <div className="flex items-center justify-between px-3 mb-2">
-                <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Projects</span>
-                <button onClick={openFolderModal} className="p-1 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors" title="New project">
+              {isLoadingProjects ? (
+                <>
+                  <div
+                    className="flex items-center justify-between px-3 mb-2 gap-2"
+                    aria-busy="true"
+                    aria-label="กำลังโหลดโปรเจกต์"
+                  >
+                    <div className="h-3 w-[4.5rem] rounded bg-stone-200 animate-pulse" />
+                    <div className="h-7 w-7 rounded-lg bg-stone-200 animate-pulse shrink-0" />
+                  </div>
+                  <div className="space-y-1">
+                    {[0, 1].map((i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                      >
+                        <div className="h-5 w-5 rounded-md bg-stone-200 animate-pulse shrink-0" />
+                        <div className="h-4 flex-1 max-w-[9rem] rounded bg-stone-200/90 animate-pulse" />
+                        <div className="h-3.5 w-4 rounded bg-stone-200 animate-pulse shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+              <div className="flex items-center justify-between px-3 mb-2 gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-xs font-bold text-stone-400 uppercase tracking-wider shrink-0">Projects</span>
+                  {!isPro && planLimits.maxProjects !== null && (
+                    <span className="text-[10px] font-semibold text-stone-400 truncate" title="Free plan project limit">
+                      {folders.length}/{planLimits.maxProjects}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={openFolderModal}
+                  disabled={!canCreateMoreProjects}
+                  className="p-1 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  title={
+                    canCreateMoreProjects
+                      ? "New project"
+                      : "แผนฟรีสร้างได้สูงสุด 5 โปรเจกต์ — อัปเกรด Pro เพื่อไม่จำกัด"
+                  }
+                >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
@@ -596,7 +866,7 @@ export default function Home() {
                       className={`group relative ${dragOverFolder === folder.id ? "ring-2 ring-blue-400 ring-offset-1" : ""}`}
                       onDragOver={(e) => handleDragOver(e, folder.id)}
                       onDragLeave={handleDragLeave}
-                      onDrop={() => handleDrop(folder.id)}
+                      onDrop={() => void handleDrop(folder.id)}
                     >
                       <button
                         onClick={() => setActiveFolder(folder.id)}
@@ -610,7 +880,11 @@ export default function Home() {
                           <FolderIcon icon={folder.icon} className="w-5 h-5" />
                         </div>
                         <span className="truncate">{folder.name}</span>
-                        <span className="ml-auto text-xs opacity-60">{folder.roomIds.length}</span>
+                        <span className="ml-auto text-xs opacity-60 tabular-nums">
+                          {!isPro && planLimits.maxPagesPerProject !== null
+                            ? `${folder.roomIds.length}/${planLimits.maxPagesPerProject}`
+                            : folder.roomIds.length}
+                        </span>
                       </button>
                       {/* Folder context buttons */}
                       <div className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-0.5">
@@ -657,12 +931,54 @@ export default function Home() {
                   </div>
                 )}
               </div>
+                </>
+              )}
             </div>
           </div>
         </aside>
 
         {/* ─── Main Content ─────────────────────────────── */}
         <main className="flex-1 min-w-0 px-6 lg:px-10 py-8">
+          {isLoadingRooms ? (
+            <div aria-busy="true" aria-label="กำลังโหลดห้อง">
+              <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="h-8 w-8 rounded-lg bg-stone-200 animate-pulse shrink-0" />
+                    <div className="h-8 w-40 rounded-lg bg-stone-200 animate-pulse" />
+                  </div>
+                  <div className="h-4 w-28 rounded bg-stone-200/90 animate-pulse mt-2" />
+                </div>
+                <div className="h-10 w-32 rounded-xl bg-stone-200 animate-pulse shrink-0" />
+              </div>
+              <div className="mb-6 flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1 h-11 rounded-xl bg-stone-200 animate-pulse" />
+                <div className="h-11 w-full sm:w-[7.25rem] rounded-xl bg-stone-200 animate-pulse shrink-0" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-white rounded-2xl border border-stone-200 overflow-hidden flex flex-col"
+                  >
+                    <div className="h-1 w-full bg-stone-200 animate-pulse" />
+                    <div className="p-5 flex-1">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-5 w-14 rounded-md bg-stone-200 animate-pulse" />
+                          <div className="h-5 w-20 rounded-md bg-stone-200 animate-pulse" />
+                        </div>
+                        <div className="h-3 w-12 rounded bg-stone-200 animate-pulse" />
+                      </div>
+                      <div className="h-5 w-full max-w-[14rem] rounded bg-stone-200 animate-pulse mb-3" />
+                      <div className="h-3.5 w-36 rounded bg-stone-200/90 animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Page Header */}
           <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -681,6 +997,17 @@ export default function Home() {
                 {searchQuery && ` matching "${searchQuery}"`}
                 {selectedTags.length > 0 && ` tagged ${selectedTags.join(", ")}`}
               </p>
+              {activeFolder &&
+                activeFolder !== "__uncategorized" &&
+                activeFolderData &&
+                activeFolderData.id !== "__uncategorized" &&
+                !isPro &&
+                planLimits.maxPagesPerProject !== null && (
+                  <p className="text-xs text-stone-500 mt-1.5">
+                    โปรเจกต์นี้: {activeFolderData.roomIds.length}/{planLimits.maxPagesPerProject} หน้า
+                    <span className="text-stone-400"> — Pro ไม่จำกัด</span>
+                  </p>
+                )}
             </div>
             <button onClick={openCreateModal}
               className="inline-flex items-center px-5 py-2.5 text-sm font-bold rounded-xl shadow-sm text-white bg-stone-900 hover:bg-stone-800 transition-all hover:shadow-md">
@@ -978,6 +1305,8 @@ export default function Home() {
               )}
             </>
           )}
+          </>
+          )}
         </main>
       </div>
 
@@ -987,7 +1316,7 @@ export default function Home() {
       <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Create New Room"
         footer={<>
           <button onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
-          <button onClick={handleCreateRoom} disabled={isSubmitting || !roomNameInput.trim()}
+          <button onClick={handleCreateRoom} disabled={isSubmitting || !roomNameInput.trim() || isActiveProjectFull}
             className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed">
             {isSubmitting ? "Creating..." : "Create Room"}
           </button>
@@ -998,7 +1327,7 @@ export default function Home() {
             <input type="text" id="roomName" value={roomNameInput} onChange={(e) => setRoomNameInput(e.target.value)}
               placeholder="e.g. Project Alpha" autoFocus
               className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 sm:text-sm font-medium"
-              onKeyDown={(e) => { if (e.key === "Enter" && roomNameInput.trim()) handleCreateRoom(); }} />
+              onKeyDown={(e) => { if (e.key === "Enter" && roomNameInput.trim() && !isActiveProjectFull) handleCreateRoom(); }} />
           </div>
           <div>
             <label htmlFor="roomTags" className="block text-sm font-medium text-stone-700 mb-1">Tags</label>
@@ -1008,9 +1337,14 @@ export default function Home() {
               onKeyDown={(e) => { if (e.key === "Enter") handleCreateRoom(); }} />
             <p className="mt-1 text-xs text-stone-400">Separate multiple tags with commas</p>
           </div>
-          {activeFolder && activeFolder !== "__uncategorized" && (
+          {activeFolder && activeFolder !== "__uncategorized" && isActiveProjectFull && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-xl text-xs text-amber-900 border border-amber-100">
+              โปรเจกต์นี้มีครบ {planLimits.maxPagesPerProject ?? 5} หน้าแล้ว (แผนฟรี) — ลบห้องออกจากโปรเจกต์หรืออัปเกรด Pro
+            </div>
+          )}
+          {activeFolder && activeFolder !== "__uncategorized" && !isActiveProjectFull && (
             <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl text-xs text-blue-700">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Room will be added to &quot;{activeFolderData?.name}&quot; project
@@ -1062,9 +1396,9 @@ export default function Home() {
       <Modal isOpen={isFolderModalOpen} onClose={() => setIsFolderModalOpen(false)} title="New Project"
         footer={<>
           <button onClick={() => setIsFolderModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
-          <button onClick={handleCreateFolder} disabled={!folderNameInput.trim()}
+          <button onClick={() => void handleCreateFolder()} disabled={!folderNameInput.trim() || folderActionPending}
             className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed">
-            Create Project
+            {folderActionPending ? "Creating..." : "Create Project"}
           </button>
         </>}>
         <div className="space-y-4">
@@ -1073,7 +1407,7 @@ export default function Home() {
             <input type="text" value={folderNameInput} onChange={(e) => setFolderNameInput(e.target.value)}
               placeholder="e.g. Marketing Campaign" autoFocus
               className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 sm:text-sm font-medium"
-              onKeyDown={(e) => { if (e.key === "Enter" && folderNameInput.trim()) handleCreateFolder(); }} />
+              onKeyDown={(e) => { if (e.key === "Enter" && folderNameInput.trim() && !folderActionPending) void handleCreateFolder(); }} />
           </div>
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">Color</label>
@@ -1113,9 +1447,9 @@ export default function Home() {
       <Modal isOpen={isEditFolderModalOpen} onClose={() => setIsEditFolderModalOpen(false)} title="Edit Project"
         footer={<>
           <button onClick={() => setIsEditFolderModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
-          <button onClick={handleEditFolder} disabled={!folderNameInput.trim()}
+          <button onClick={() => void handleEditFolder()} disabled={!folderNameInput.trim() || folderActionPending}
             className="px-4 py-2 text-sm font-bold text-stone-900 bg-yellow-400 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed">
-            Save Changes
+            {folderActionPending ? "Saving..." : "Save Changes"}
           </button>
         </>}>
         <div className="space-y-4">
@@ -1123,7 +1457,7 @@ export default function Home() {
             <label className="block text-sm font-medium text-stone-700 mb-1">Project Name</label>
             <input type="text" value={folderNameInput} onChange={(e) => setFolderNameInput(e.target.value)} autoFocus
               className="block w-full rounded-xl border-stone-200 bg-stone-50 px-4 py-3 text-stone-900 placeholder-stone-400 focus:border-yellow-500 focus:bg-white focus:ring-2 focus:ring-yellow-500/20 sm:text-sm font-medium"
-              onKeyDown={(e) => { if (e.key === "Enter" && folderNameInput.trim()) handleEditFolder(); }} />
+              onKeyDown={(e) => { if (e.key === "Enter" && folderNameInput.trim() && !folderActionPending) void handleEditFolder(); }} />
           </div>
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">Color</label>
@@ -1155,9 +1489,9 @@ export default function Home() {
       <Modal isOpen={isDeleteFolderModalOpen} onClose={() => setIsDeleteFolderModalOpen(false)} title="Delete Project"
         footer={<>
           <button onClick={() => setIsDeleteFolderModalOpen(false)} className="px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-xl hover:bg-stone-50">Cancel</button>
-          <button onClick={handleDeleteFolder}
-            className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700">
-            Delete Project
+          <button onClick={() => void handleDeleteFolder()} disabled={folderActionPending}
+            className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            {folderActionPending ? "Deleting..." : "Delete Project"}
           </button>
         </>}>
         <p className="text-sm text-stone-500">

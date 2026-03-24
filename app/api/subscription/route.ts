@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUserFromRequest } from '@/lib/supabaseServer';
 import { prisma } from '@/lib/prisma';
+import {
+  FREE_TIER_MAX_PAGES_PER_PROJECT,
+  FREE_TIER_MAX_PROJECTS,
+} from '@/lib/planTier';
 
 export async function GET(req: Request) {
   try {
@@ -15,7 +19,13 @@ export async function GET(req: Request) {
     });
 
     if (!dbUser) {
-      return NextResponse.json({ isPro: false });
+      return NextResponse.json({
+        isPro: false,
+        limits: {
+          maxProjects: FREE_TIER_MAX_PROJECTS,
+          maxPagesPerProject: FREE_TIER_MAX_PAGES_PER_PROJECT,
+        },
+      });
     }
 
     // User is Pro only if they have a Stripe price ID and their subscription period hasn't expired yet
@@ -29,6 +39,10 @@ export async function GET(req: Request) {
       stripeCustomerId: dbUser.stripeCustomerId,
       stripeSubscriptionId: dbUser.stripeSubscriptionId,
       stripeCurrentPeriodEnd: dbUser.stripeCurrentPeriodEnd,
+      limits: {
+        maxProjects: isPro ? null : FREE_TIER_MAX_PROJECTS,
+        maxPagesPerProject: isPro ? null : FREE_TIER_MAX_PAGES_PER_PROJECT,
+      },
     });
   } catch (error) {
     console.error('Error fetching subscription:', error);

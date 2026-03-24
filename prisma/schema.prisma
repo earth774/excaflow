@@ -25,8 +25,35 @@ model Room {
   lastSyncedAt DateTime?
   
   history      RoomHistory[]
+  projectLinks ProjectRoom[]
 
   @@index([ownerId])
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  ownerId   String
+  name      String
+  color     String
+  icon      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships ProjectRoom[]
+
+  @@index([ownerId])
+}
+
+model ProjectRoom {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  roomId    String
+  room      Room    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, roomId])
+  @@index([roomId])
+  @@index([projectId])
 }
 
 model RoomHistory {
