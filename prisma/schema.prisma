@@ -79,3 +79,13 @@ model User {
 
   @@map(name: "users")
 }
+
+/** Monthly AI diagram generation counts per Supabase user (calendar month UTC, YYYY-MM). */
+model AiDiagramUsage {
+  userId   String
+  monthKey String
+  count    Int    @default(0)
+
+  @@id([userId, monthKey])
+  @@map("ai_diagram_usage")
+}

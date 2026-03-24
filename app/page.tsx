@@ -7,8 +7,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
 import {
+  FREE_TIER_AI_DIAGRAM_GENERATIONS_PER_MONTH,
   FREE_TIER_MAX_PAGES_PER_PROJECT,
   FREE_TIER_MAX_PROJECTS,
+  PRO_TIER_AI_DIAGRAM_GENERATIONS_PER_MONTH,
 } from "@/lib/planTier";
 import type { User } from "@supabase/supabase-js";
 
@@ -315,7 +317,7 @@ export default function LandingPage() {
                 {[
                   `Up to ${FREE_TIER_MAX_PROJECTS} projects`,
                   `Up to ${FREE_TIER_MAX_PAGES_PER_PROJECT} rooms per project`,
-                  "Basic AI generation",
+                  `AI diagram generation: ${FREE_TIER_AI_DIAGRAM_GENERATIONS_PER_MONTH}/month (UTC)`,
                   "Cloud sync",
                 ].map((item, i) => (
                   <li
@@ -365,7 +367,8 @@ export default function LandingPage() {
                   <span className="text-stone-400">/month</span>
                 </div>
                 <p className="mt-3 text-stone-400">
-                  No project or room caps—built for daily, team-heavy use.
+                  Higher AI quota than Free, unlimited projects and rooms, same
+                  cloud sync—built for daily, team-heavy use.
                 </p>
               </div>
 
@@ -373,11 +376,7 @@ export default function LandingPage() {
                 {[
                   "Unlimited projects",
                   "Unlimited rooms per project",
-                  "Advanced AI features",
-                  "Priority cloud sync",
-                  "Unlimited devices",
-                  "High-res exports",
-                  "Priority support",
+                  `AI diagram generation: ${PRO_TIER_AI_DIAGRAM_GENERATIONS_PER_MONTH}/month (UTC)`,
                 ].map((item, i) => (
                   <li
                     key={i}

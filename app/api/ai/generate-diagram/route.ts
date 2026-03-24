@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai, getModelName, isOpenAIConfigured } from "@/lib/openai";
+import { getCurrentUserFromRequest } from "@/lib/supabaseServer";
+import { isUserPro } from "@/lib/planLimits";
+import {
+  getAiDiagramUsageState,
+  recordAiDiagramGeneration,
+} from "@/lib/aiDiagramQuota";
 
 // Helper function to clean and validate Mermaid syntax
 function cleanAndValidateMermaidSyntax(syntax: string): string {
@@ -272,6 +278,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Prompt is required and must be a non-empty string" },
         { status: 400 }
+      );
+    }
+
+    const authUser = await getCurrentUserFromRequest();
+    if (!authUser?.id) {
+      return NextResponse.json(
+        {
+          error: "กรุณาเข้าสู่ระบบเพื่อใช้ AI สร้างไดอะแกรม",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 }
+      );
+    }
+
+    const userIsPro = await isUserPro(authUser.id);
+    const quotaBefore = await getAiDiagramUsageState(authUser.id, userIsPro);
+    if (quotaBefore.used >= quotaBefore.limit) {
+      return NextResponse.json(
+        {
+          error:
+            userIsPro
+              ? `คุณใช้โควตา AI สร้างไดอะแกรมครบแล้ว (${quotaBefore.limit} ครั้ง/เดือน) ลองใหม่เดือนถัดไป`
+              : `คุณใช้โควตา AI สร้างไดอะแกรมครบแล้ว (${quotaBefore.limit} ครั้ง/เดือน แผนฟรี) อัปเกรด Pro เพื่อโควตาสูงขึ้น`,
+          code: "AI_DIAGRAM_QUOTA_EXCEEDED",
+          limit: quotaBefore.limit,
+          used: quotaBefore.used,
+          monthKey: quotaBefore.monthKey,
+        },
+        { status: 429 }
       );
     }
 
@@ -560,6 +595,24 @@ export async function POST(request: NextRequest) {
     
     const hasLabels = Object.keys(nodeLabels).length > 0;
 
+    const recordResult = await recordAiDiagramGeneration(
+      authUser.id,
+      userIsPro
+    );
+    if (!recordResult.recorded) {
+      console.warn(
+        "AI diagram quota record skipped (at cap); user:",
+        authUser.id
+      );
+    }
+    const quotaAfter = await getAiDiagramUsageState(authUser.id, userIsPro);
+    const quotaPayload = {
+      aiDiagramGenerationsLimit: quotaAfter.limit,
+      aiDiagramGenerationsUsed: quotaAfter.used,
+      aiDiagramGenerationsRemaining: quotaAfter.remaining,
+      aiDiagramUsageMonth: quotaAfter.monthKey,
+    };
+
     // If user requested Mermaid format, return it directly
     if (format === "mermaid") {
       return NextResponse.json({
@@ -570,6 +623,7 @@ export async function POST(request: NextRequest) {
         nodeLabels,
         rawPrompt: sanitizedPrompt,
         success: true,
+        ...quotaPayload,
       });
     }
 
@@ -584,6 +638,7 @@ export async function POST(request: NextRequest) {
       nodeLabels, // Provide parsed labels for client-side fallback
       rawPrompt: sanitizedPrompt,
       success: true,
+      ...quotaPayload,
     });
   } catch (error: unknown) {
     console.error("Error generating diagram:", error);

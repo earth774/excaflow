@@ -48,17 +48,19 @@ export async function GET(
     // Include ownership info in response (false if not logged in)
     const isOwner = userId ? room.ownerId === userId : false;
 
-    // Check subscription status
+    // Pro status — align with /api/subscription (active price + period end)
     let isSubscriptionActive = false;
     if (userId) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { stripeCurrentPeriodEnd: true },
+        select: { stripePriceId: true, stripeCurrentPeriodEnd: true },
       });
 
-      if (user?.stripeCurrentPeriodEnd) {
-        isSubscriptionActive = user.stripeCurrentPeriodEnd > new Date();
-      }
+      isSubscriptionActive = !!(
+        user?.stripePriceId &&
+        user?.stripeCurrentPeriodEnd &&
+        user.stripeCurrentPeriodEnd.getTime() > Date.now()
+      );
     }
     
     return NextResponse.json({

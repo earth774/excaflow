@@ -204,8 +204,6 @@ const Excalidraw = dynamic(
   }
 );
 
-import { STRIPE_PRICE_ID } from "@/lib/stripeConfig";
-
 /** Max prompt length — must match app/api/ai/generate-diagram/route.ts */
 const AI_PROMPT_MAX = 1000;
 
@@ -219,22 +217,22 @@ function aiFlashStorageKey(roomId: string) {
   return `roomAiDiagramFlash_${roomId}`;
 }
 
-const LockIcon = ({ className }: { className?: string }) => (
-  <svg 
-    className={className} 
-    fill="none" 
-    stroke="currentColor" 
-    viewBox="0 0 24 24" 
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      strokeWidth={2} 
-      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" 
-    />
-  </svg>
-);
+function formatAiQuotaMonthUtc(ym: string): string {
+  const [y, m] = ym.split("-").map((s) => parseInt(s, 10));
+  if (!y || !m || m < 1 || m > 12) return ym;
+  return new Intl.DateTimeFormat("th-TH", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, 1)));
+}
+
+type AiDiagramQuota = {
+  used: number;
+  limit: number;
+  remaining: number;
+  monthKey: string;
+};
 
 export default function RoomClient() {
   const params = useParams();
@@ -266,13 +264,16 @@ export default function RoomClient() {
     serverUpdatedAt: string;
   } | null>(null);
   const [isOwner, setIsOwner] = useState<boolean>(false);
-  const [isSubscriptionActive, setIsSubscriptionActive] = useState<boolean>(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [aiPrompt, setAIPrompt] = useState("");
   const [aiMergeMode, setAiMergeMode] = useState<"append" | "replace">("append");
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiError, setAIError] = useState<string | null>(null);
   const [aiSuccessBanner, setAiSuccessBanner] = useState<string | null>(null);
+  const [aiDiagramQuota, setAiDiagramQuota] = useState<AiDiagramQuota | null>(
+    null
+  );
+  const [aiQuotaLoading, setAiQuotaLoading] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<Map<string, string>>(new Map());
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   const [uploadedFiles, setUploadedFiles] = useState<Set<string>>(new Set());
@@ -283,41 +284,6 @@ export default function RoomClient() {
   
   const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
 
-  const handleCheckout = async () => {
-    try {
-      const response = await authenticatedFetch("/api/checkout", {
-        method: "POST",
-        body: JSON.stringify({ priceId: STRIPE_PRICE_ID }),
-      });
-
-      const { url, error } = await response.json();
-
-      if (error) {
-        alert("Checkout failed: " + error);
-        return;
-      }
-
-      if (url) {
-        window.location.href = url;
-      } else {
-        alert("Failed to start checkout.");
-      }
-    } catch (err) {
-      console.error("Checkout error:", err);
-      alert("An unexpected error occurred.");
-    }
-  };
-
-  const handleLockedFeature = (action: () => void) => {
-    if (!isSubscriptionActive) {
-      if (confirm("Your subscription has expired. Please upgrade to continue using this feature.")) {
-        handleCheckout();
-      }
-      return;
-    }
-    action();
-  };
-  
   // Track current initialScene files to detect changes without causing re-renders
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const initialSceneFilesRef = useRef<Record<string, any>>({});
@@ -473,6 +439,70 @@ export default function RoomClient() {
     return () => window.removeEventListener("keydown", onKey);
   }, [showAIModal]);
 
+  const fetchAiDiagramQuota = useCallback(async (showLoading = true) => {
+    try {
+      if (showLoading) setAiQuotaLoading(true);
+      const res = await authenticatedFetch("/api/subscription");
+      if (!res.ok) {
+        setAiDiagramQuota(null);
+        return;
+      }
+      const data = (await res.json()) as {
+        limits?: {
+          aiDiagramGenerationsPerMonth?: number;
+          aiDiagramGenerationsUsed?: number;
+          aiDiagramGenerationsRemaining?: number;
+          aiDiagramUsageMonth?: string;
+        };
+      };
+      const L = data.limits;
+      if (
+        typeof L?.aiDiagramGenerationsPerMonth === "number" &&
+        typeof L?.aiDiagramGenerationsUsed === "number"
+      ) {
+        const limit = L.aiDiagramGenerationsPerMonth;
+        const used = L.aiDiagramGenerationsUsed;
+        const remaining =
+          typeof L.aiDiagramGenerationsRemaining === "number"
+            ? L.aiDiagramGenerationsRemaining
+            : Math.max(0, limit - used);
+        setAiDiagramQuota({
+          used,
+          limit,
+          remaining,
+          monthKey:
+            typeof L.aiDiagramUsageMonth === "string"
+              ? L.aiDiagramUsageMonth
+              : "",
+        });
+      } else {
+        setAiDiagramQuota(null);
+      }
+    } catch (e) {
+      console.error("fetchAiDiagramQuota:", e);
+      setAiDiagramQuota(null);
+    } finally {
+      if (showLoading) setAiQuotaLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOwner) {
+      setAiDiagramQuota(null);
+      setAiQuotaLoading(false);
+    }
+  }, [isOwner]);
+
+  useEffect(() => {
+    if (!isOwner || !isClient) return;
+    void fetchAiDiagramQuota();
+  }, [isOwner, isClient, fetchAiDiagramQuota]);
+
+  useEffect(() => {
+    if (!showAIModal || !isOwner) return;
+    void fetchAiDiagramQuota(false);
+  }, [showAIModal, isOwner, fetchAiDiagramQuota]);
+
   // Load room: first from DB, then check localStorage for drafts
   useEffect(() => {
     setIsClient(true);
@@ -495,7 +525,6 @@ export default function RoomClient() {
           
           // Set ownership status
           setIsOwner(dbRoom.isOwner === true);
-          setIsSubscriptionActive(dbRoom.isSubscriptionActive === true);
           
           // Check localStorage for draft (only if owner)
           // Await the async loadLocalRoom call
@@ -881,15 +910,8 @@ export default function RoomClient() {
               !uploadedFileIdsRef.current.has(fileId) &&
               !uploadingFileIdsRef.current.has(fileId)
             ) {
-              // Only upload to Supabase if subscription is active (Pro feature)
-              if (isSubscriptionActive) {
-                // Upload in background
-                uploadFileToSupabase(fileId, fileData, roomId);
-              } else {
-                // For free users, we just keep it in localStorage (which happens automatically via saveLocalRoom)
-                // We mark it as "uploaded" to prevent repeated checks, but it's really just "processed"
-                uploadedFileIdsRef.current.add(fileId);
-              }
+              // Upload to cloud storage so synced rooms keep images (Free and Pro)
+              uploadFileToSupabase(fileId, fileData, roomId);
             }
           }
         }
@@ -925,7 +947,7 @@ export default function RoomClient() {
         }
       }, 500); // 500ms debounce
     },
-    [localRoom, roomId, syncStatus.status, syncStatus.dbExists, isOwner, uploadFileToSupabase, excalidrawAPI, isSubscriptionActive]
+    [localRoom, roomId, syncStatus.status, syncStatus.dbExists, isOwner, uploadFileToSupabase, excalidrawAPI]
   );
 
   const fetchHistory = async () => {
@@ -1554,18 +1576,12 @@ export default function RoomClient() {
               </div>
 
               <button
-                onClick={() => handleLockedFeature(handlePush)}
+                onClick={handlePush}
                 disabled={isSyncing}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
-                  !isSubscriptionActive ? "text-stone-400 cursor-not-allowed" : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
-                }`}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group text-stone-600 hover:bg-stone-50 hover:text-stone-900"
               >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                  !isSubscriptionActive ? "bg-stone-100" : "bg-stone-100 group-hover:bg-green-100"
-                }`}>
-                  {!isSubscriptionActive ? (
-                    <LockIcon className="w-3.5 h-3.5 text-stone-400" />
-                  ) : isSyncing ? (
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors bg-stone-100 group-hover:bg-green-100">
+                  {isSyncing ? (
                     <div className="w-3.5 h-3.5 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin" />
                   ) : (
                     <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-green-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1574,52 +1590,33 @@ export default function RoomClient() {
                   )}
                 </div>
                 <span>{isSyncing ? "Saving..." : "Save to Server"}</span>
-                {!isSubscriptionActive && <span className="ml-auto text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
               </button>
 
               <button
-                onClick={() => handleLockedFeature(handleCheckSync)}
+                onClick={handleCheckSync}
                 disabled={isSyncing}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
-                  !isSubscriptionActive ? "text-stone-400 cursor-not-allowed" : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
-                }`}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group text-stone-600 hover:bg-stone-50 hover:text-stone-900"
               >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                  !isSubscriptionActive ? "bg-stone-100" : "bg-stone-100 group-hover:bg-blue-100"
-                }`}>
-                  {!isSubscriptionActive ? (
-                    <LockIcon className="w-3.5 h-3.5 text-stone-400" />
-                  ) : (
-                    <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  )}
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors bg-stone-100 group-hover:bg-blue-100">
+                  <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                 </div>
                 <span>Check Status</span>
-                {!isSubscriptionActive && <span className="ml-auto text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
               </button>
 
               {syncStatus.dbExists && (
                 <button
-                  onClick={() => handleLockedFeature(handlePull)}
+                  onClick={handlePull}
                   disabled={isSyncing}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
-                    !isSubscriptionActive ? "text-stone-400 cursor-not-allowed" : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
-                  }`}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group text-stone-600 hover:bg-stone-50 hover:text-stone-900"
                 >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                    !isSubscriptionActive ? "bg-stone-100" : "bg-stone-100 group-hover:bg-purple-100"
-                  }`}>
-                    {!isSubscriptionActive ? (
-                      <LockIcon className="w-3.5 h-3.5 text-stone-400" />
-                    ) : (
-                      <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                      </svg>
-                    )}
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors bg-stone-100 group-hover:bg-purple-100">
+                    <svg className="w-3.5 h-3.5 text-stone-500 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                    </svg>
                   </div>
                   <span>Pull from Server</span>
-                  {!isSubscriptionActive && <span className="ml-auto text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
                 </button>
               )}
 
@@ -1641,24 +1638,38 @@ export default function RoomClient() {
               </button>
 
               <button
-                onClick={() => handleLockedFeature(() => setShowAIModal(true))}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group ${
-                  !isSubscriptionActive ? "text-stone-400 cursor-not-allowed" : "text-stone-600 hover:bg-stone-50 hover:text-stone-900"
-                }`}
+                onClick={() => setShowAIModal(true)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group text-stone-600 hover:bg-stone-50 hover:text-stone-900"
               >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                  !isSubscriptionActive ? "bg-stone-100" : "bg-gradient-to-br from-yellow-400 to-amber-500 shadow-sm"
-                }`}>
-                  {!isSubscriptionActive ? (
-                    <LockIcon className="w-3.5 h-3.5 text-stone-400" />
-                  ) : (
-                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  )}
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors bg-gradient-to-br from-yellow-400 to-amber-500 shadow-sm">
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
                 </div>
-                <span>AI Generate</span>
-                {!isSubscriptionActive && <span className="ml-auto text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded font-bold">PRO</span>}
+                <div className="min-w-0 flex-1 text-left">
+                  <span className="block">AI Generate</span>
+                  {aiQuotaLoading ? (
+                    <span className="block text-[10px] font-normal text-stone-400 truncate">
+                      กำลังโหลดโควตา…
+                    </span>
+                  ) : aiDiagramQuota ? (
+                    <span
+                      className={`block text-[10px] font-normal tabular-nums truncate ${
+                        aiDiagramQuota.remaining <= 0
+                          ? "text-red-600"
+                          : aiDiagramQuota.remaining <= 3
+                            ? "text-amber-700"
+                            : "text-stone-400"
+                      }`}
+                    >
+                      AI {aiDiagramQuota.used}/{aiDiagramQuota.limit} ครั้งเดือนนี้
+                      (UTC)
+                      {aiDiagramQuota.remaining > 0
+                        ? ` · เหลือ ${aiDiagramQuota.remaining}`
+                        : " · เต็มโควตา"}
+                    </span>
+                  ) : null}
+                </div>
               </button>
             </>
           )}
@@ -1782,37 +1793,86 @@ export default function RoomClient() {
           aria-labelledby="ai-modal-title"
         >
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-stone-100 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-start gap-3 mb-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-sm shrink-0">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            <div className="mb-4">
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center shadow-sm shrink-0">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 id="ai-modal-title" className="text-lg font-bold text-stone-900">
+                      AI Generate
+                    </h3>
+                    <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
+                      อธิบายไดอะแกรมที่ต้องการ (flowchart, sequence, state ฯลฯ) AI จะสร้างเป็น Mermaid แล้ววางลงบน Excalidraw ให้
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAIModal(false);
+                    setAIPrompt("");
+                    setAIError(null);
+                    setAiMergeMode("append");
+                  }}
+                  className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors shrink-0"
+                  aria-label="ปิด"
+                >
+                  <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                </div>
-                <div className="min-w-0">
-                  <h3 id="ai-modal-title" className="text-lg font-bold text-stone-900">
-                    AI Generate
-                  </h3>
-                  <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
-                    อธิบายไดอะแกรมที่ต้องการ (flowchart, sequence, state ฯลฯ) AI จะสร้างเป็น Mermaid แล้ววางลงบน Excalidraw ให้
-                  </p>
-                </div>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAIModal(false);
-                  setAIPrompt("");
-                  setAIError(null);
-                  setAiMergeMode("append");
-                }}
-                className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors shrink-0"
-                aria-label="ปิด"
-              >
-                <svg className="w-4 h-4 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              {aiQuotaLoading ? (
+                <p className="text-[11px] text-stone-400 mt-3">
+                  กำลังโหลดโควตา AI…
+                </p>
+              ) : aiDiagramQuota ? (
+                <div
+                  className={`mt-3 rounded-xl border px-3 py-2.5 text-[11px] leading-snug ${
+                    aiDiagramQuota.remaining <= 0
+                      ? "border-red-200 bg-red-50 text-red-800"
+                      : aiDiagramQuota.remaining <= 3
+                        ? "border-amber-200 bg-amber-50 text-amber-950"
+                        : "border-stone-200 bg-stone-50 text-stone-700"
+                  }`}
+                >
+                  <span className="font-semibold text-stone-900">
+                    โควตา AI สร้างไดอะแกรม
+                  </span>
+                  {aiDiagramQuota.monthKey ? (
+                    <span className="text-stone-500">
+                      {" "}
+                      · เดือน {formatAiQuotaMonthUtc(aiDiagramQuota.monthKey)}{" "}
+                      (UTC)
+                    </span>
+                  ) : null}
+                  <div className="mt-1 tabular-nums">
+                    ใช้ไป{" "}
+                    <span className="font-bold">{aiDiagramQuota.used}</span> /{" "}
+                    <span className="font-bold">{aiDiagramQuota.limit}</span> ครั้ง
+                    {aiDiagramQuota.remaining > 0 ? (
+                      <>
+                        {" "}
+                        · เหลือ{" "}
+                        <span className="font-bold">
+                          {aiDiagramQuota.remaining}
+                        </span>{" "}
+                        ครั้ง
+                      </>
+                    ) : (
+                      <span className="font-bold"> · ครบโควตาแล้ว</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-stone-400 mt-3">
+                  ไม่สามารถโหลดโควตาได้ — ลองรีเฟรชหน้าหรือเข้าสู่ระบบอีกครั้ง
+                </p>
+              )}
             </div>
 
             <div className="mb-4">

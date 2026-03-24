@@ -5,6 +5,7 @@ import {
   FREE_TIER_MAX_PAGES_PER_PROJECT,
   FREE_TIER_MAX_PROJECTS,
 } from '@/lib/planTier';
+import { getAiDiagramUsageState } from '@/lib/aiDiagramQuota';
 
 export async function GET(req: Request) {
   try {
@@ -19,11 +20,16 @@ export async function GET(req: Request) {
     });
 
     if (!dbUser) {
+      const aiQuota = await getAiDiagramUsageState(user.id, false);
       return NextResponse.json({
         isPro: false,
         limits: {
           maxProjects: FREE_TIER_MAX_PROJECTS,
           maxPagesPerProject: FREE_TIER_MAX_PAGES_PER_PROJECT,
+          aiDiagramGenerationsPerMonth: aiQuota.limit,
+          aiDiagramGenerationsUsed: aiQuota.used,
+          aiDiagramGenerationsRemaining: aiQuota.remaining,
+          aiDiagramUsageMonth: aiQuota.monthKey,
         },
       });
     }
@@ -34,6 +40,8 @@ export async function GET(req: Request) {
       dbUser.stripeCurrentPeriodEnd && 
       dbUser.stripeCurrentPeriodEnd.getTime() > Date.now();
 
+    const aiQuota = await getAiDiagramUsageState(user.id, !!isPro);
+
     return NextResponse.json({
       isPro: !!isPro,
       stripeCustomerId: dbUser.stripeCustomerId,
@@ -42,6 +50,10 @@ export async function GET(req: Request) {
       limits: {
         maxProjects: isPro ? null : FREE_TIER_MAX_PROJECTS,
         maxPagesPerProject: isPro ? null : FREE_TIER_MAX_PAGES_PER_PROJECT,
+        aiDiagramGenerationsPerMonth: aiQuota.limit,
+        aiDiagramGenerationsUsed: aiQuota.used,
+        aiDiagramGenerationsRemaining: aiQuota.remaining,
+        aiDiagramUsageMonth: aiQuota.monthKey,
       },
     });
   } catch (error) {
